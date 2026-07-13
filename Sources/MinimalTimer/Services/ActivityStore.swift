@@ -10,10 +10,45 @@ struct DailyActivitySummary: Identifiable {
     var totalDuration: TimeInterval { sessions.reduce(0) { $0 + $1.duration } }
 }
 
-struct ActivityOverview: Equatable {
+struct ActivitySeries: Identifiable, Equatable {
+    let id: String
+    let name: String
     let todayDuration: TimeInterval
     let yesterdayDuration: TimeInterval
-    let weeklyDailyAverage: TimeInterval
+    let sevenDayDuration: TimeInterval
+
+    var weeklyDailyAverage: TimeInterval { sevenDayDuration / 7 }
+}
+
+struct ActivityOverview: Equatable {
+    let activities: [ActivitySeries]
+
+    var todayDuration: TimeInterval {
+        activities.reduce(0) { $0 + $1.todayDuration }
+    }
+
+    var yesterdayDuration: TimeInterval {
+        activities.reduce(0) { $0 + $1.yesterdayDuration }
+    }
+
+    var weeklyDailyAverage: TimeInterval {
+        activities.reduce(0) { $0 + $1.sevenDayDuration } / 7
+    }
+
+    func chartSeries(maxNamedActivities: Int = 5) -> [ActivitySeries] {
+        guard maxNamedActivities > 0, activities.count > maxNamedActivities else { return activities }
+
+        let namedActivities = Array(activities.prefix(maxNamedActivities))
+        let remainingActivities = activities.dropFirst(maxNamedActivities)
+        let other = ActivitySeries(
+            id: "aggregate:other",
+            name: "Other activities",
+            todayDuration: remainingActivities.reduce(0) { $0 + $1.todayDuration },
+            yesterdayDuration: remainingActivities.reduce(0) { $0 + $1.yesterdayDuration },
+            sevenDayDuration: remainingActivities.reduce(0) { $0 + $1.sevenDayDuration }
+        )
+        return namedActivities + [other]
+    }
 }
 
 @MainActor
@@ -109,16 +144,56 @@ final class ActivityStore: ObservableObject {
 
     func activityOverview(at referenceDate: Date) -> ActivityOverview {
         let today = calendar.startOfDay(for: referenceDate)
-        let durations = (0..<7).map { daysAgo -> TimeInterval in
-            let day = calendar.date(byAdding: .day, value: -daysAgo, to: today) ?? today
-            return loggedDuration(on: day, through: referenceDate)
+        var activityData: [String: (name: String, latestStart: Date, durations: [TimeInterval])] = [:]
+        var intervals = sessions.map { (name: $0.name, start: $0.startedAt, end: $0.endedAt) }
+        if let activeActivity {
+            intervals.append((
+                name: activeActivity.name,
+                start: activeActivity.startedAt,
+                end: max(referenceDate, activeActivity.startedAt)
+            ))
         }
 
-        return ActivityOverview(
-            todayDuration: durations[0],
-            yesterdayDuration: durations[1],
-            weeklyDailyAverage: durations.reduce(0, +) / 7
-        )
+        for interval in intervals {
+            let normalizedName = interval.name.lowercased()
+            var data = activityData[normalizedName]
+                ?? (name: interval.name, latestStart: interval.start, durations: Array(repeating: 0, count: 7))
+            if interval.start > data.latestStart {
+                data.name = interval.name
+                data.latestStart = interval.start
+            }
+
+            for daysAgo in 0..<7 {
+                let day = calendar.date(byAdding: .day, value: -daysAgo, to: today) ?? today
+                data.durations[daysAgo] += overlapDuration(
+                    from: interval.start,
+                    to: interval.end,
+                    on: day,
+                    through: referenceDate
+                )
+            }
+            activityData[normalizedName] = data
+        }
+
+        let activities = activityData.compactMap { normalizedName, data -> ActivitySeries? in
+            let sevenDayDuration = data.durations.reduce(0, +)
+            guard sevenDayDuration > 0 else { return nil }
+            return ActivitySeries(
+                id: normalizedName,
+                name: data.name,
+                todayDuration: data.durations[0],
+                yesterdayDuration: data.durations[1],
+                sevenDayDuration: sevenDayDuration
+            )
+        }
+        .sorted {
+            if $0.sevenDayDuration == $1.sevenDayDuration {
+                return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+            }
+            return $0.sevenDayDuration > $1.sevenDayDuration
+        }
+
+        return ActivityOverview(activities: activities)
     }
 
     private func reloadHistory() {
@@ -132,19 +207,16 @@ final class ActivityStore: ObservableObject {
         try? modelContext.save()
     }
 
-    private func loggedDuration(on day: Date, through referenceDate: Date) -> TimeInterval {
+    private func overlapDuration(
+        from intervalStart: Date,
+        to intervalEnd: Date,
+        on day: Date,
+        through referenceDate: Date
+    ) -> TimeInterval {
         let dayStart = calendar.startOfDay(for: day)
         guard let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart) else { return 0 }
-
-        var intervals = sessions.map { ($0.startedAt, $0.endedAt) }
-        if let activeActivity {
-            intervals.append((activeActivity.startedAt, max(referenceDate, activeActivity.startedAt)))
-        }
-
-        return intervals.reduce(0) { total, interval in
-            let overlapStart = max(interval.0, dayStart)
-            let overlapEnd = min(interval.1, dayEnd, referenceDate)
-            return total + max(0, overlapEnd.timeIntervalSince(overlapStart))
-        }
+        let overlapStart = max(intervalStart, dayStart)
+        let overlapEnd = min(intervalEnd, dayEnd, referenceDate)
+        return max(0, overlapEnd.timeIntervalSince(overlapStart))
     }
 }

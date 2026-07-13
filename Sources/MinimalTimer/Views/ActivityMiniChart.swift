@@ -3,60 +3,114 @@ import SwiftUI
 struct ActivityMiniChart: View {
     let overview: ActivityOverview
 
-    private struct Bar: Identifiable {
-        let id: String
-        let label: String
-        let duration: TimeInterval
-        let isPrimary: Bool
+    private enum Period: String, CaseIterable, Identifiable {
+        case today
+        case yesterday
+        case average
+
+        var id: String { rawValue }
+
+        var label: String {
+            switch self {
+            case .today: "Today"
+            case .yesterday: "Yesterday"
+            case .average: "7-day avg"
+            }
+        }
+
+        func duration(for activity: ActivitySeries) -> TimeInterval {
+            switch self {
+            case .today: activity.todayDuration
+            case .yesterday: activity.yesterdayDuration
+            case .average: activity.weeklyDailyAverage
+            }
+        }
     }
 
-    private var bars: [Bar] {
-        [
-            Bar(id: "today", label: "Today", duration: overview.todayDuration, isPrimary: true),
-            Bar(id: "yesterday", label: "Yesterday", duration: overview.yesterdayDuration, isPrimary: false),
-            Bar(id: "average", label: "7-day avg", duration: overview.weeklyDailyAverage, isPrimary: false)
-        ]
+    private let colors: [Color] = [.blue, .orange, .green, .purple, .pink]
+    private let legendColumns = [
+        GridItem(.flexible(), spacing: 8),
+        GridItem(.flexible(), spacing: 8)
+    ]
+
+    private var activities: [ActivitySeries] {
+        overview.chartSeries()
     }
 
     private var maximumDuration: TimeInterval {
-        max(60, bars.map(\.duration).max() ?? 0)
+        max(
+            60,
+            activities.flatMap { activity in
+                Period.allCases.map { $0.duration(for: activity) }
+            }.max() ?? 0
+        )
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
+        VStack(alignment: .leading, spacing: 6) {
             Text("Logged time")
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-            HStack(alignment: .bottom, spacing: 12) {
-                ForEach(bars) { bar in
-                    VStack(spacing: 3) {
-                        Text(DurationFormatter.concise(bar.duration))
-                            .font(.caption2.monospacedDigit())
-                            .foregroundStyle(.secondary)
+            if activities.isEmpty {
+                Text("No activity logged this week")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+            } else {
+                HStack(alignment: .bottom, spacing: 12) {
+                    ForEach(Period.allCases) { period in
+                        VStack(spacing: 3) {
+                            HStack(alignment: .bottom, spacing: 3) {
+                                ForEach(Array(activities.enumerated()), id: \.element.id) { index, activity in
+                                    let duration = period.duration(for: activity)
+                                    RoundedRectangle(cornerRadius: 2)
+                                        .fill(color(for: index, activity: activity).opacity(duration > 0 ? 1 : 0.15))
+                                        .frame(width: barWidth, height: barHeight(for: duration))
+                                        .accessibilityLabel("\(activity.name), \(period.label)")
+                                        .accessibilityValue(DurationFormatter.concise(duration))
+                                }
+                            }
+                            .frame(maxWidth: .infinity, minHeight: 40, alignment: .bottom)
 
-                        RoundedRectangle(cornerRadius: 3)
-                            .fill(bar.isPrimary ? Color.accentColor : Color.secondary.opacity(0.35))
-                            .frame(width: 28, height: barHeight(for: bar.duration))
-
-                        Text(bar.label)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
+                            Text(period.label)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                        .frame(maxWidth: .infinity)
                     }
-                    .frame(maxWidth: .infinity)
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(bar.label)
-                    .accessibilityValue(DurationFormatter.concise(bar.duration))
+                }
+
+                LazyVGrid(columns: legendColumns, alignment: .leading, spacing: 4) {
+                    ForEach(Array(activities.enumerated()), id: \.element.id) { index, activity in
+                        HStack(spacing: 5) {
+                            Circle()
+                                .fill(color(for: index, activity: activity))
+                                .frame(width: 7, height: 7)
+                            Text(activity.name)
+                                .font(.caption2)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                        }
+                        .help(activity.name)
+                    }
                 }
             }
-            .frame(height: 64, alignment: .bottom)
         }
         .accessibilityIdentifier("activitySummaryChart")
     }
 
+    private var barWidth: CGFloat {
+        activities.count <= 3 ? 10 : 7
+    }
+
     private func barHeight(for duration: TimeInterval) -> CGFloat {
         guard duration > 0 else { return 2 }
-        return max(5, 34 * duration / maximumDuration)
+        return max(4, 38 * duration / maximumDuration)
+    }
+
+    private func color(for index: Int, activity: ActivitySeries) -> Color {
+        activity.id == "aggregate:other" ? .secondary : colors[index % colors.count]
     }
 }

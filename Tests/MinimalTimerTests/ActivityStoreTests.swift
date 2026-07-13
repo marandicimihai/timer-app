@@ -136,4 +136,35 @@ func activityOverviewIncludesActiveTimeAndSplitsSessionsAcrossMidnight() throws 
     #expect(overview.todayDuration == 7_200)
     #expect(overview.yesterdayDuration == 9_000)
     #expect(overview.weeklyDailyAverage == 28_800.0 / 7.0)
+
+    let midnightActivity = overview.activities.first { $0.name == "Across midnight" }
+    #expect(midnightActivity?.todayDuration == 1_800)
+    #expect(midnightActivity?.yesterdayDuration == 1_800)
+    #expect(midnightActivity?.weeklyDailyAverage == 3_600.0 / 7.0)
+
+    let activeActivity = overview.activities.first { $0.name == "Active" }
+    #expect(activeActivity?.todayDuration == 1_800)
+    #expect(activeActivity?.yesterdayDuration == 0)
+}
+
+@Test @MainActor
+func chartKeepsFiveActivitiesAndCombinesTheRestAsOther() throws {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+    let today = calendar.date(from: DateComponents(year: 2026, month: 7, day: 13))!
+    let referenceDate = calendar.date(byAdding: .hour, value: 12, to: today)!
+    let clock = TestClock(referenceDate)
+    let store = try makeStore(clock: clock, calendar: calendar)
+
+    for index in 1...7 {
+        let start = calendar.date(byAdding: .minute, value: index * 10, to: today)!
+        store.startActivity(named: "Activity \(index)", at: start)
+        _ = store.finishActivity(at: start.addingTimeInterval(TimeInterval(index * 60)))
+    }
+
+    let series = store.activityOverview(at: referenceDate).chartSeries()
+    #expect(series.count == 6)
+    #expect(series.prefix(5).map(\.name) == ["Activity 7", "Activity 6", "Activity 5", "Activity 4", "Activity 3"])
+    #expect(series.last?.name == "Other activities")
+    #expect(series.last?.todayDuration == 180)
 }
