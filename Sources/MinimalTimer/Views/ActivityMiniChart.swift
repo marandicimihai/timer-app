@@ -67,6 +67,7 @@ struct ActivityMiniChart: View {
                                     RoundedRectangle(cornerRadius: 2)
                                         .fill(color(for: index, activity: activity).opacity(duration > 0 ? 1 : 0.15))
                                         .frame(width: barWidth, height: barHeight(for: duration))
+                                        .help("\(activity.name) · \(period.label) · \(DurationFormatter.clock(duration))")
                                         .accessibilityLabel("\(activity.name), \(period.label)")
                                         .accessibilityValue(DurationFormatter.concise(duration))
                                 }
