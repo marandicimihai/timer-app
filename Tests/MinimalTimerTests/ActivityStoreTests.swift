@@ -87,4 +87,53 @@ func dailySummariesGroupActivitiesAndHistoryCanBeCleared() throws {
     store.clearHistory()
     #expect(store.sessions.isEmpty)
     #expect(store.dailySummaries.isEmpty)
+    #expect(store.recentActivityNames().isEmpty)
+}
+
+@Test @MainActor
+func recentActivityNamesAreUniqueAndNewestFirst() throws {
+    let clock = TestClock(Date(timeIntervalSince1970: 1_000))
+    let store = try makeStore(clock: clock)
+
+    for name in ["Writing", "Email", "writing", "Planning"] {
+        store.startActivity(named: name)
+        clock.date.addTimeInterval(60)
+        _ = store.finishActivity()
+    }
+
+    #expect(store.recentActivityNames(limit: 3) == ["Planning", "writing", "Email"])
+
+    store.startActivity(named: "Planning")
+    #expect(store.recentActivityNames(limit: 3) == ["writing", "Email"])
+}
+
+@Test @MainActor
+func activityOverviewIncludesActiveTimeAndSplitsSessionsAcrossMidnight() throws {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+    let today = calendar.date(from: DateComponents(year: 2026, month: 7, day: 13))!
+    let referenceDate = calendar.date(byAdding: .hour, value: 12, to: today)!
+    let clock = TestClock(referenceDate)
+    let store = try makeStore(clock: clock, calendar: calendar)
+
+    let yesterday = calendar.date(byAdding: .day, value: -1, to: today)!
+    store.startActivity(named: "Yesterday", at: calendar.date(byAdding: .hour, value: 10, to: yesterday)!)
+    _ = store.finishActivity(at: calendar.date(byAdding: .hour, value: 12, to: yesterday)!)
+
+    store.startActivity(named: "Across midnight", at: calendar.date(byAdding: .minute, value: -30, to: today)!)
+    _ = store.finishActivity(at: calendar.date(byAdding: .minute, value: 30, to: today)!)
+
+    let twoDaysAgo = calendar.date(byAdding: .day, value: -2, to: today)!
+    store.startActivity(named: "Earlier", at: calendar.date(byAdding: .hour, value: 8, to: twoDaysAgo)!)
+    _ = store.finishActivity(at: calendar.date(byAdding: .minute, value: 690, to: twoDaysAgo)!)
+
+    store.startActivity(named: "Today", at: calendar.date(byAdding: .hour, value: 9, to: today)!)
+    _ = store.finishActivity(at: calendar.date(byAdding: .hour, value: 10, to: today)!)
+
+    store.startActivity(named: "Active", at: calendar.date(byAdding: .minute, value: 690, to: today)!)
+
+    let overview = store.activityOverview(at: referenceDate)
+    #expect(overview.todayDuration == 7_200)
+    #expect(overview.yesterdayDuration == 9_000)
+    #expect(overview.weeklyDailyAverage == 28_800.0 / 7.0)
 }

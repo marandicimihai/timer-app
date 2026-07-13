@@ -29,6 +29,7 @@ struct TimerPopoverView: View {
         }
         .padding(16)
         .frame(width: 330)
+        .onAppear { controller.refresh() }
         .onReceive(ticker) { _ in controller.refresh() }
     }
 
@@ -67,6 +68,34 @@ struct TimerPopoverView: View {
             .keyboardShortcut(.defaultAction)
             .disabled(activityName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             .accessibilityIdentifier("startActivityButton")
+
+            if !controller.activityStore.recentActivityNames().isEmpty {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("Recent")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    ScrollView(.horizontal) {
+                        HStack(spacing: 6) {
+                            ForEach(Array(controller.activityStore.recentActivityNames().enumerated()), id: \.offset) { index, name in
+                                Button(name) {
+                                    startRecentActivity(named: name)
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+                                .lineLimit(1)
+                                .accessibilityIdentifier("recentActivityButton\(index)")
+                                .help("Start \(name)")
+                            }
+                        }
+                    }
+                    .scrollIndicators(.hidden)
+                }
+            }
+
+            ActivityMiniChart(
+                overview: controller.activityStore.activityOverview(at: controller.currentDate)
+            )
         }
     }
 
@@ -107,6 +136,11 @@ struct TimerPopoverView: View {
 
     private func startActivity() {
         controller.startActivity(named: activityName)
+        activityName = ""
+    }
+
+    private func startRecentActivity(named name: String) {
+        controller.startActivity(named: name)
         activityName = ""
     }
 }

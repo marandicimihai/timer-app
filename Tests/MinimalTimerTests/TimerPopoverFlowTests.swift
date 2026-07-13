@@ -23,6 +23,24 @@ func activityLoggingWorksWithoutPomodoro() throws {
 }
 
 @Test @MainActor
+func recentActivityStartsWithoutPomodoro() throws {
+    let clock = TestClock(Date(timeIntervalSince1970: 1_000))
+    let store = try makeStore(clock: clock)
+    let pomodoro = PomodoroTimer(now: { clock.date }, notifier: TestNotifier())
+    let controller = TimerAppController(activityStore: store, pomodoro: pomodoro, now: { clock.date })
+
+    controller.startActivity(named: "Planning")
+    clock.date.addTimeInterval(300)
+    controller.finishActivity()
+    let recentName = store.recentActivityNames().first!
+
+    controller.startActivity(named: recentName)
+
+    #expect(store.activeActivity?.name == "Planning")
+    #expect(pomodoro.activePhase == nil)
+}
+
+@Test @MainActor
 func finishingAnActivityFromTheMenuFlowStopsPomodoro() throws {
     let clock = TestClock(Date(timeIntervalSince1970: 1_000))
     let store = try makeStore(clock: clock)
