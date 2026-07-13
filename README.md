@@ -13,6 +13,17 @@ swift run MinimalTimer
 
 The app requires macOS 14 or later. Data remains on this Mac only.
 
+## Install
+
+Install a signed release build in your personal Applications folder:
+
+```sh
+./scripts/install.sh
+open "$HOME/Applications/Minimal Timer.app"
+```
+
+The installed app runs only in the menu bar. It does not add a Dock icon.
+
 ## Test
 
 ```sh
