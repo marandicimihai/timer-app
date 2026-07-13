@@ -1,6 +1,7 @@
 # Minimal Timer
 
-A local-only macOS menu-bar activity tracker with a Pomodoro timer.
+A local-only macOS menu-bar activity tracker with a Pomodoro timer. Activity
+logs are stored in `~/Library/Application Support/MinimalTimer/activity-history.sqlite`.
 
 ## Run
 

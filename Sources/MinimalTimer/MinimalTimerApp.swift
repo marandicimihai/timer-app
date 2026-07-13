@@ -22,7 +22,7 @@ struct MinimalTimerApp: App {
 
     init() {
         do {
-            let container = try ModelContainer(for: ActivitySession.self)
+            let container = try ActivityPersistence().makeContainer()
             modelContainer = container
             let store = ActivityStore(modelContext: container.mainContext)
             _controller = StateObject(wrappedValue: TimerAppController(
