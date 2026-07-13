@@ -1,6 +1,6 @@
 import Combine
 import Foundation
-import UserNotifications
+@preconcurrency import UserNotifications
 
 enum PomodoroPhase: String, CaseIterable {
     case focus
@@ -31,9 +31,13 @@ protocol PomodoroNotifying {
 }
 
 final class UserNotificationService: PomodoroNotifying {
-    private let notificationCenter = UNUserNotificationCenter.current()
+    private var notificationCenter: UNUserNotificationCenter? {
+        guard Bundle.main.bundleURL.pathExtension == "app" else { return nil }
+        return UNUserNotificationCenter.current()
+    }
 
     func requestAuthorizationIfNeeded() {
+        guard let notificationCenter else { return }
         notificationCenter.getNotificationSettings { [notificationCenter] settings in
             guard settings.authorizationStatus == .notDetermined else { return }
             notificationCenter.requestAuthorization(options: [.alert, .sound]) { _, _ in }
@@ -41,12 +45,32 @@ final class UserNotificationService: PomodoroNotifying {
     }
 
     func sendCompletion(for phase: PomodoroPhase) {
+        guard let notificationCenter else {
+            sendCommandLineNotification(for: phase)
+            return
+        }
+
         let content = UNMutableNotificationContent()
         content.title = "\(phase.title) complete"
         content.body = phase == .focus ? "Your break is ready when you are." : "Ready for another focus session?"
         content.sound = .default
         let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
         notificationCenter.add(request)
+    }
+
+    private func sendCommandLineNotification(for phase: PomodoroPhase) {
+        let script: String
+        switch phase {
+        case .focus:
+            script = "display notification \"Your break is ready when you are.\" with title \"Focus complete\""
+        case .break:
+            script = "display notification \"Ready for another focus session?\" with title \"Break complete\""
+        }
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        process.arguments = ["-e", script]
+        try? process.run()
     }
 }
 

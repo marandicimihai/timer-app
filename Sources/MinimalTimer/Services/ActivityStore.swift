@@ -15,6 +15,7 @@ final class ActivityStore: ObservableObject {
     @Published private(set) var activeActivity: ActiveActivity?
     @Published private(set) var sessions: [ActivitySession] = []
 
+    private let modelContainer: ModelContainer
     private let modelContext: ModelContext
     private let now: () -> Date
     private let calendar: Calendar
@@ -24,6 +25,7 @@ final class ActivityStore: ObservableObject {
         now: @escaping () -> Date = Date.init,
         calendar: Calendar = .current
     ) {
+        self.modelContainer = modelContext.container
         self.modelContext = modelContext
         self.now = now
         self.calendar = calendar
