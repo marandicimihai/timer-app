@@ -52,7 +52,7 @@ struct MinimalTimerApp: App {
         }
         .menuBarExtraStyle(.window)
 
-        WindowGroup(id: "history") {
+        Window("History", id: "history") {
             HistoryView()
                 .environmentObject(controller)
         }
