@@ -28,6 +28,12 @@ struct HistoryView: View {
                                     .monospacedDigit()
                                     .foregroundStyle(.secondary)
                             }
+                            .contentShape(Rectangle())
+                            .contextMenu {
+                                Button("Delete Entry", role: .destructive) {
+                                    controller.deleteActivitySession(id: session.id)
+                                }
+                            }
                         }
                     } header: {
                         HStack {
@@ -50,8 +56,7 @@ struct HistoryView: View {
         }
         .alert("Clear all activity history?", isPresented: $showingClearConfirmation) {
             Button("Clear History", role: .destructive) {
-                controller.activityStore.clearHistory()
-                controller.objectWillChange.send()
+                controller.clearActivityHistory()
             }
             Button("Cancel", role: .cancel) {}
         } message: {

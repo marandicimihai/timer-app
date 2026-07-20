@@ -2,7 +2,7 @@ import Combine
 import Foundation
 @preconcurrency import UserNotifications
 
-enum PomodoroPhase: String, CaseIterable {
+enum PomodoroPhase: String, CaseIterable, Sendable {
     case focus
     case `break`
 
@@ -13,13 +13,6 @@ enum PomodoroPhase: String, CaseIterable {
         }
     }
 
-    var duration: TimeInterval {
-        switch self {
-        case .focus: 25 * 60
-        case .break: 5 * 60
-        }
-    }
-
     var next: PomodoroPhase {
         self == .focus ? .break : .focus
     }
@@ -27,13 +20,28 @@ enum PomodoroPhase: String, CaseIterable {
 
 protocol PomodoroNotifying {
     func requestAuthorizationIfNeeded()
-    func sendCompletion(for phase: PomodoroPhase)
+    func sendCompletion(
+        for phase: PomodoroPhase,
+        startNextPhase: @escaping @MainActor @Sendable () -> Void
+    )
 }
 
-final class UserNotificationService: PomodoroNotifying {
+final class UserNotificationService: NSObject, PomodoroNotifying, UNUserNotificationCenterDelegate {
+    private let completionBannerPresenter: any PomodoroCompletionBannerPresenting
+
     private var notificationCenter: UNUserNotificationCenter? {
         guard Bundle.main.bundleURL.pathExtension == "app" else { return nil }
         return UNUserNotificationCenter.current()
+    }
+
+    override convenience init() {
+        self.init(completionBannerPresenter: PomodoroCompletionBannerPresenter())
+    }
+
+    init(completionBannerPresenter: any PomodoroCompletionBannerPresenting) {
+        self.completionBannerPresenter = completionBannerPresenter
+        super.init()
+        notificationCenter?.delegate = self
     }
 
     func requestAuthorizationIfNeeded() {
@@ -44,18 +52,42 @@ final class UserNotificationService: PomodoroNotifying {
         }
     }
 
-    func sendCompletion(for phase: PomodoroPhase) {
+    func sendCompletion(
+        for phase: PomodoroPhase,
+        startNextPhase: @escaping @MainActor @Sendable () -> Void
+    ) {
         guard let notificationCenter else {
             sendCommandLineNotification(for: phase)
+            completionBannerPresenter.presentCompletion(
+                for: phase,
+                startNextPhase: startNextPhase
+            )
             return
         }
 
+        let copy = PomodoroCompletionNotificationCopy(phase: phase)
         let content = UNMutableNotificationContent()
-        content.title = "\(phase.title) complete"
-        content.body = phase == .focus ? "Your break is ready when you are." : "Ready for another focus session?"
-        content.sound = .default
+        content.title = copy.title
+        content.body = copy.body
+        content.interruptionLevel = PomodoroNotificationPresentationPolicy.interruptionLevel
         let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
-        notificationCenter.add(request)
+        notificationCenter.add(request) { error in
+            if let error {
+                NSLog("MinimalTimer could not deliver a Pomodoro notification: %@", error.localizedDescription)
+            }
+        }
+        completionBannerPresenter.presentCompletion(
+            for: phase,
+            startNextPhase: startNextPhase
+        )
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler(PomodoroNotificationPresentationPolicy.foregroundOptions)
     }
 
     private func sendCommandLineNotification(for phase: PomodoroPhase) {
@@ -78,15 +110,29 @@ final class UserNotificationService: PomodoroNotifying {
 final class PomodoroTimer: ObservableObject {
     @Published private(set) var activePhase: PomodoroPhase?
     @Published private(set) var completedPhase: PomodoroPhase?
-    @Published private(set) var remainingDuration: TimeInterval = PomodoroPhase.focus.duration
+    @Published private(set) var isAwaitingNextPhase = false
+    @Published private(set) var remainingDuration: TimeInterval
+
+    let settings: PomodoroSettings
 
     private var startedAt: Date?
+    private var activeDuration: TimeInterval?
+    private var completionTask: Task<Void, Never>?
     private let now: () -> Date
     private let notifier: PomodoroNotifying
+    private let completionDelay: (TimeInterval) -> Duration
 
-    init(now: @escaping () -> Date = Date.init, notifier: PomodoroNotifying = UserNotificationService()) {
+    init(
+        settings: PomodoroSettings = PomodoroSettings(),
+        now: @escaping () -> Date = Date.init,
+        notifier: PomodoroNotifying = UserNotificationService(),
+        completionDelay: @escaping (TimeInterval) -> Duration = { .seconds($0) }
+    ) {
+        self.settings = settings
         self.now = now
         self.notifier = notifier
+        self.completionDelay = completionDelay
+        self.remainingDuration = settings.duration(for: .focus)
     }
 
     var suggestedPhase: PomodoroPhase {
@@ -94,34 +140,85 @@ final class PomodoroTimer: ObservableObject {
     }
 
     var progress: Double {
-        guard let activePhase else { return 0 }
-        return min(1, max(0, 1 - remainingDuration / activePhase.duration))
+        progress(at: now())
     }
 
-    func start(_ phase: PomodoroPhase, at date: Date? = nil) {
-        notifier.requestAuthorizationIfNeeded()
+    func progress(at date: Date) -> Double {
+        guard let startedAt, let activeDuration, activeDuration > 0 else { return 0 }
+        let elapsed = max(0, date.timeIntervalSince(startedAt))
+        return min(1, elapsed / activeDuration)
+    }
+
+    func remainingDuration(at date: Date) -> TimeInterval {
+        guard let startedAt, let activeDuration else { return remainingDuration }
+        let elapsed = max(0, date.timeIntervalSince(startedAt))
+        return max(0, activeDuration - elapsed)
+    }
+
+    func canStart(_ phase: PomodoroPhase) -> Bool {
+        activePhase == nil && phase == suggestedPhase
+    }
+
+    @discardableResult
+    func start(_ phase: PomodoroPhase, at date: Date? = nil) -> Bool {
+        guard canStart(phase) else { return false }
+        if settings.notificationsEnabled {
+            notifier.requestAuthorizationIfNeeded()
+        }
+        let duration = settings.duration(for: phase)
+        let startDate = date ?? now()
         activePhase = phase
-        completedPhase = nil
-        startedAt = date ?? now()
-        remainingDuration = phase.duration
+        isAwaitingNextPhase = false
+        startedAt = startDate
+        activeDuration = duration
+        remainingDuration = duration
+        let delay = completionDelay(duration)
+        completionTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: delay)
+            guard !Task.isCancelled else { return }
+            self?.tick(at: startDate.addingTimeInterval(duration))
+        }
+        return true
     }
 
     func stop() {
+        completionTask?.cancel()
+        completionTask = nil
         activePhase = nil
-        completedPhase = nil
+        isAwaitingNextPhase = false
         startedAt = nil
-        remainingDuration = PomodoroPhase.focus.duration
+        activeDuration = nil
+        remainingDuration = settings.duration(for: suggestedPhase)
     }
 
     func tick(at date: Date? = nil) {
-        guard let activePhase, let startedAt else { return }
+        guard let activePhase, let startedAt, let activeDuration else { return }
         let elapsed = max(0, (date ?? now()).timeIntervalSince(startedAt))
-        remainingDuration = max(0, activePhase.duration - elapsed)
+        remainingDuration = max(0, activeDuration - elapsed)
 
         guard remainingDuration == 0 else { return }
+        self.isAwaitingNextPhase = true
         self.activePhase = nil
         self.completedPhase = activePhase
         self.startedAt = nil
-        notifier.sendCompletion(for: activePhase)
+        self.activeDuration = nil
+        completionTask?.cancel()
+        completionTask = nil
+        if settings.notificationsEnabled {
+            let nextPhase = activePhase.next
+            notifier.sendCompletion(for: activePhase) { [weak self] in
+                self?.start(nextPhase)
+            }
+        }
+    }
+
+    func refreshIdleDurationFromSettings() {
+        guard activePhase == nil else { return }
+        remainingDuration = settings.duration(for: suggestedPhase)
+    }
+
+    func requestNotificationAuthorizationIfNeeded() {
+        guard settings.notificationsEnabled else { return }
+        notifier.requestAuthorizationIfNeeded()
     }
 }

@@ -2,15 +2,42 @@ import AppKit
 import SwiftData
 import SwiftUI
 
+@MainActor
 final class ApplicationDelegate: NSObject, NSApplicationDelegate {
-    var terminationHandler: (() -> Void)?
+    private var didFinishLaunching = false
+    private var didScheduleStartup = false
+    private var controller: TimerAppController?
+    private var pomodoroStatusItemController: PomodoroStatusItemController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        didFinishLaunching = true
+        scheduleStartupIfPossible()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        terminationHandler?()
+        controller?.applicationWillTerminate()
+    }
+
+    func configureLifecycle(
+        controller: TimerAppController,
+        pomodoroStatusItemController: PomodoroStatusItemController
+    ) {
+        self.controller = controller
+        self.pomodoroStatusItemController = pomodoroStatusItemController
+        scheduleStartupIfPossible()
+    }
+
+    private func scheduleStartupIfPossible() {
+        guard
+            didFinishLaunching,
+            !didScheduleStartup,
+            let pomodoroStatusItemController
+        else { return }
+        didScheduleStartup = true
+        DispatchQueue.main.async {
+            pomodoroStatusItemController.start()
+        }
     }
 }
 
@@ -19,16 +46,30 @@ struct MinimalTimerApp: App {
     @NSApplicationDelegateAdaptor(ApplicationDelegate.self) private var applicationDelegate
     private let modelContainer: ModelContainer
     @StateObject private var controller: TimerAppController
+    @StateObject private var detailWindowCoordinator: DetailWindowCoordinator
+    @StateObject private var menuBarPreferences: MenuBarPreferences
+    @StateObject private var pomodoroStatusItemController: PomodoroStatusItemController
 
     init() {
+        _detailWindowCoordinator = StateObject(wrappedValue: DetailWindowCoordinator())
         do {
             let container = try ActivityPersistence().makeContainer()
             modelContainer = container
             let store = ActivityStore(modelContext: container.mainContext)
-            _controller = StateObject(wrappedValue: TimerAppController(
+            let pomodoroSettings = PomodoroSettings()
+            let timerController = TimerAppController(
                 activityStore: store,
-                pomodoro: PomodoroTimer()
-            ))
+                pomodoro: PomodoroTimer(settings: pomodoroSettings)
+            )
+            let menuBarPreferences = MenuBarPreferences()
+            _controller = StateObject(wrappedValue: timerController)
+            _menuBarPreferences = StateObject(wrappedValue: menuBarPreferences)
+            _pomodoroStatusItemController = StateObject(
+                wrappedValue: PomodoroStatusItemController(
+                    controller: timerController,
+                    preferences: menuBarPreferences
+                )
+            )
         } catch {
             fatalError("Unable to prepare local activity history: \(error.localizedDescription)")
         }
@@ -38,25 +79,25 @@ struct MinimalTimerApp: App {
         MenuBarExtra {
             TimerPopoverView()
                 .environmentObject(controller)
-                .onAppear {
-                    applicationDelegate.terminationHandler = controller.applicationWillTerminate
-                }
+                .environmentObject(detailWindowCoordinator)
         } label: {
-            HStack(spacing: 4) {
-                Image(systemName: controller.menuBarSymbol)
-                if controller.isTimerRunning {
-                    Text(controller.menuBarTime)
-                        .monospacedDigit()
+            TimerMenuBarLabel(controller: controller)
+                .onAppear {
+                    applicationDelegate.configureLifecycle(
+                        controller: controller,
+                        pomodoroStatusItemController: pomodoroStatusItemController
+                    )
                 }
-            }
         }
         .menuBarExtraStyle(.window)
 
-        Window("History", id: "history") {
-            HistoryView()
+        Window("Minimal Timer", id: "history") {
+            HistorySettingsWindowView()
                 .environmentObject(controller)
+                .environmentObject(menuBarPreferences)
+                .background(DetailWindowReader(coordinator: detailWindowCoordinator))
         }
-        .defaultSize(width: 440, height: 520)
+        .defaultSize(width: 480, height: 560)
         .modelContainer(modelContainer)
     }
 }

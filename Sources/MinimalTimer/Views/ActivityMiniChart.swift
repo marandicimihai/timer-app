@@ -5,34 +5,15 @@ struct ActivityMiniChart: View {
 
     @State private var hoveredBar: HoveredBar?
 
-    private enum Period: String, CaseIterable, Identifiable {
-        case today
-        case yesterday
-        case average
-
-        var id: String { rawValue }
-
-        var label: String {
-            switch self {
-            case .today: "Today"
-            case .yesterday: "Yesterday"
-            case .average: "7-day avg"
-            }
-        }
-
-        func duration(for activity: ActivitySeries) -> TimeInterval {
-            switch self {
-            case .today: activity.todayDuration
-            case .yesterday: activity.yesterdayDuration
-            case .average: activity.weeklyDailyAverage
-            }
-        }
-    }
-
     private struct HoveredBar: Equatable {
         let activityID: String
-        let period: Period
+        let period: ActivityChartPeriod
+        let location: CGPoint
     }
+
+    private static let chartCoordinateSpace = "activityMiniChart"
+    private static let tooltipWidth: CGFloat = 164
+    private static let tooltipHeight: CGFloat = 42
 
     private let colors: [Color] = [.blue, .orange, .green, .purple, .pink]
     private let legendColumns = [
@@ -48,15 +29,13 @@ struct ActivityMiniChart: View {
         max(
             60,
             activities.flatMap { activity in
-                Period.allCases.map { $0.duration(for: activity) }
+                ActivityChartPeriod.allCases.map { $0.duration(for: activity) }
             }.max() ?? 0
         )
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            chartHeader
-
             if activities.isEmpty {
                 Text("No activity logged this week")
                     .font(.caption2)
@@ -64,11 +43,11 @@ struct ActivityMiniChart: View {
                     .frame(maxWidth: .infinity, minHeight: 44)
             } else {
                 HStack(alignment: .bottom, spacing: 12) {
-                    ForEach(Period.allCases) { period in
+                    ForEach(ActivityChartPeriod.allCases) { period in
                         VStack(spacing: 3) {
                             HStack(alignment: .bottom, spacing: 3) {
-                                ForEach(Array(activities.enumerated()), id: \.element.id) { index, activity in
-                                    bar(for: activity, index: index, period: period)
+                                ForEach(activities(for: period)) { activity in
+                                    bar(for: activity, period: period)
                                 }
                             }
                             .frame(maxWidth: .infinity, minHeight: 40, alignment: .bottom)
@@ -98,34 +77,30 @@ struct ActivityMiniChart: View {
                 }
             }
         }
+        .coordinateSpace(name: Self.chartCoordinateSpace)
+        .overlay {
+            GeometryReader { proxy in
+                if
+                    let hoveredBar,
+                    let activity = activities.first(where: { $0.id == hoveredBar.activityID })
+                {
+                    tooltip(for: activity, period: hoveredBar.period)
+                        .position(tooltipPosition(for: hoveredBar, in: proxy.size))
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
+            }
+        }
         .accessibilityIdentifier("activitySummaryChart")
         .onDisappear { hoveredBar = nil }
     }
 
-    private var chartHeader: some View {
-        HStack(spacing: 6) {
-            if
-                let hoveredBar,
-                let activity = activities.first(where: { $0.id == hoveredBar.activityID })
-            {
-                Text("\(activity.name) · \(hoveredBar.period.label)")
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                Spacer(minLength: 4)
-                Text(DurationFormatter.clock(hoveredBar.period.duration(for: activity)))
-                    .monospacedDigit()
-            } else {
-                Text("Logged time")
-                Spacer()
-            }
-        }
-        .font(.caption)
-        .foregroundStyle(.secondary)
-        .frame(height: 16)
-    }
-
     private var barWidth: CGFloat {
         activities.count <= 3 ? 10 : 7
+    }
+
+    private func activities(for period: ActivityChartPeriod) -> [ActivitySeries] {
+        overview.chartSeries(for: period)
     }
 
     private func barHeight(for duration: TimeInterval) -> CGFloat {
@@ -133,30 +108,93 @@ struct ActivityMiniChart: View {
         return max(4, 38 * duration / maximumDuration)
     }
 
-    private func bar(for activity: ActivitySeries, index: Int, period: Period) -> some View {
+    private func bar(for activity: ActivitySeries, period: ActivityChartPeriod) -> some View {
         let duration = period.duration(for: activity)
-        let hoverTarget = HoveredBar(activityID: activity.id, period: period)
 
         return ZStack(alignment: .bottom) {
             Color.clear
             RoundedRectangle(cornerRadius: 2)
-                .fill(color(for: index, activity: activity).opacity(duration > 0 ? 1 : 0.15))
+                .fill(color(for: activity))
                 .frame(width: barWidth, height: barHeight(for: duration))
         }
         .frame(width: max(10, barWidth), height: 40)
         .contentShape(Rectangle())
-        .onHover { isHovering in
-            if isHovering {
-                hoveredBar = hoverTarget
-            } else if hoveredBar == hoverTarget {
-                hoveredBar = nil
+        .onContinuousHover(coordinateSpace: .named(Self.chartCoordinateSpace)) { phase in
+            switch phase {
+            case let .active(location):
+                hoveredBar = HoveredBar(
+                    activityID: activity.id,
+                    period: period,
+                    location: location
+                )
+            case .ended:
+                if
+                    hoveredBar?.activityID == activity.id,
+                    hoveredBar?.period == period
+                {
+                    hoveredBar = nil
+                }
             }
         }
         .accessibilityLabel("\(activity.name), \(period.label)")
         .accessibilityValue(DurationFormatter.concise(duration))
     }
 
+    private func tooltip(for activity: ActivitySeries, period: ActivityChartPeriod) -> some View {
+        HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(activity.name)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Text(period.label)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer(minLength: 4)
+
+            Text(DurationFormatter.clock(period.duration(for: activity)))
+                .monospacedDigit()
+        }
+        .font(.caption)
+        .padding(.horizontal, 8)
+        .frame(width: Self.tooltipWidth, height: Self.tooltipHeight)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 7))
+        .overlay {
+            RoundedRectangle(cornerRadius: 7)
+                .stroke(.separator.opacity(0.5))
+        }
+        .shadow(color: .black.opacity(0.18), radius: 4, y: 2)
+    }
+
+    private func tooltipPosition(for hoveredBar: HoveredBar, in size: CGSize) -> CGPoint {
+        let horizontalInset = Self.tooltipWidth / 2 + 4
+        let x = min(
+            max(hoveredBar.location.x, horizontalInset),
+            max(horizontalInset, size.width - horizontalInset)
+        )
+        let verticalOffset = Self.tooltipHeight / 2 + 8
+        let belowCursor = hoveredBar.location.y + verticalOffset
+        let fitsBelow = belowCursor + Self.tooltipHeight / 2 <= size.height
+        let y = fitsBelow ? belowCursor : hoveredBar.location.y - verticalOffset
+        return CGPoint(x: x, y: y)
+    }
+
+    private func color(for activity: ActivitySeries) -> Color {
+        let index = activities.firstIndex { $0.id == activity.id } ?? 0
+        return color(for: index, activity: activity)
+    }
+
     private func color(for index: Int, activity: ActivitySeries) -> Color {
         activity.id == "aggregate:other" ? .secondary : colors[index % colors.count]
+    }
+}
+
+private extension ActivityChartPeriod {
+    var label: String {
+        switch self {
+        case .today: "Today"
+        case .yesterday: "Yesterday"
+        case .sevenDayAverage: "7-day avg"
+        }
     }
 }

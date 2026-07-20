@@ -19,8 +19,11 @@ swift build -c release --product MinimalTimer
 readonly binary_directory="$(swift build -c release --show-bin-path)"
 
 mkdir -p "${staged_app}/Contents/MacOS"
+mkdir -p "${staged_app}/Contents/Resources"
 install -m 755 "${binary_directory}/MinimalTimer" "${staged_app}/Contents/MacOS/MinimalTimer"
 install -m 644 "${project_directory}/Packaging/Info.plist" "${staged_app}/Contents/Info.plist"
+install -m 644 "${project_directory}/Packaging/AppIcon.icns" "${staged_app}/Contents/Resources/AppIcon.icns"
+install -m 644 "${project_directory}/Packaging/Assets.car" "${staged_app}/Contents/Resources/Assets.car"
 
 codesign --force --sign - --timestamp=none --identifier com.mihai.minimaltimer "${staged_app}"
 codesign --verify --strict "${staged_app}"

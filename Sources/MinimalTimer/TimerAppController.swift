@@ -1,13 +1,21 @@
 import Combine
 import Foundation
 
+enum DetailWindowTab: Hashable {
+    case history
+    case statistics
+    case settings
+}
+
 @MainActor
 final class TimerAppController: ObservableObject {
     let activityStore: ActivityStore
     let pomodoro: PomodoroTimer
     @Published private(set) var currentDate: Date
+    @Published var selectedDetailWindowTab: DetailWindowTab = .history
 
     private let now: () -> Date
+    private var refreshCancellable: AnyCancellable?
 
     init(
         activityStore: ActivityStore,
@@ -18,6 +26,12 @@ final class TimerAppController: ObservableObject {
         self.pomodoro = pomodoro
         self.now = now
         self.currentDate = now()
+        refreshCancellable = Timer.publish(every: 1, on: .main, in: .common)
+            .autoconnect()
+            .sink { [weak self] date in
+                guard let self, self.isTimerRunning else { return }
+                self.refresh(at: date)
+            }
     }
 
     var isTimerRunning: Bool {
@@ -25,42 +39,107 @@ final class TimerAppController: ObservableObject {
     }
 
     var menuBarTime: String {
+        menuBarTime(at: currentDate)
+    }
+
+    func menuBarTime(at date: Date) -> String {
         if let activity = activityStore.activeActivity {
-            return DurationFormatter.clock(currentDate.timeIntervalSince(activity.startedAt))
-        }
-        if pomodoro.activePhase != nil {
-            return DurationFormatter.clock(pomodoro.remainingDuration)
+            return DurationFormatter.clock(date.timeIntervalSince(activity.startedAt))
         }
         return ""
     }
 
     var menuBarSymbol: String {
-        pomodoro.activePhase == nil ? "timer" : "leaf"
+        "timer"
     }
 
-    func refresh() {
-        currentDate = now()
+    var showsTimerValueInMenuBar: Bool {
+        activityStore.activeActivity != nil && pomodoro.settings.showTimerValueInMenuBar
+    }
+
+    func refresh(at date: Date? = nil) {
+        currentDate = date ?? now()
         pomodoro.tick(at: currentDate)
-        objectWillChange.send()
     }
 
     func startActivity(named name: String) {
-        if activityStore.activeActivity != nil {
-            pomodoro.stop()
-        }
         activityStore.startActivity(named: name, at: now())
         refresh()
     }
 
     func finishActivity() {
         _ = activityStore.finishActivity(at: now())
-        pomodoro.stop()
         refresh()
     }
 
-    func startPomodoro(_ phase: PomodoroPhase) {
-        pomodoro.start(phase, at: now())
+    func deleteActivitySession(id: UUID) {
+        guard activityStore.deleteSession(id: id) else { return }
+        objectWillChange.send()
+    }
+
+    func deleteActivityHistory(named name: String) {
+        guard activityStore.deleteActivityHistory(named: name) > 0 else { return }
+        objectWillChange.send()
+    }
+
+    func clearActivityHistory() {
+        activityStore.clearHistory()
+        objectWillChange.send()
+    }
+
+    func showHistoryTab() {
+        selectedDetailWindowTab = .history
+    }
+
+    func showSettingsTab() {
+        selectedDetailWindowTab = .settings
+    }
+
+    func showStatisticsTab() {
+        selectedDetailWindowTab = .statistics
+    }
+
+    func setFocusDurationMinutes(_ minutes: Int) {
+        pomodoro.settings.setFocusDurationMinutes(minutes)
+        pomodoro.refreshIdleDurationFromSettings()
+        objectWillChange.send()
+    }
+
+    func setBreakDurationMinutes(_ minutes: Int) {
+        pomodoro.settings.setBreakDurationMinutes(minutes)
+        pomodoro.refreshIdleDurationFromSettings()
+        objectWillChange.send()
+    }
+
+    func setPomodoroNotificationsEnabled(_ enabled: Bool) {
+        pomodoro.settings.setNotificationsEnabled(enabled)
+        if enabled {
+            pomodoro.requestNotificationAuthorizationIfNeeded()
+        }
+        objectWillChange.send()
+    }
+
+    func setShowTimerValueInMenuBar(_ enabled: Bool) {
+        pomodoro.settings.setShowTimerValueInMenuBar(enabled)
+        objectWillChange.send()
+    }
+
+    func restorePomodoroSettings() {
+        pomodoro.settings.restoreDefaults()
+        pomodoro.refreshIdleDurationFromSettings()
+        objectWillChange.send()
+    }
+
+    @discardableResult
+    func startPomodoro(_ phase: PomodoroPhase) -> Bool {
+        guard pomodoro.start(phase, at: now()) else { return false }
         refresh()
+        return true
+    }
+
+    @discardableResult
+    func startSuggestedPomodoro() -> Bool {
+        startPomodoro(pomodoro.suggestedPhase)
     }
 
     func stopPomodoro() {
