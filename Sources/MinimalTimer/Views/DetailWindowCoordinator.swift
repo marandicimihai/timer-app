@@ -8,12 +8,23 @@ final class DetailWindowCoordinator: ObservableObject {
     private var focusRequestID: UInt = 0
     private var focusTask: Task<Void, Never>?
 
+    var hasPendingFocusRequest: Bool {
+        shouldFocusWhenAvailable
+    }
+
     func requestFocus() {
         shouldFocusWhenAvailable = true
         focusRequestID &+= 1
         focusTask?.cancel()
         focusTask = nil
         scheduleFocusAttempts(for: focusRequestID)
+    }
+
+    func cancelPendingFocus() {
+        shouldFocusWhenAvailable = false
+        focusRequestID &+= 1
+        focusTask?.cancel()
+        focusTask = nil
     }
 
     func register(window: NSWindow?) {

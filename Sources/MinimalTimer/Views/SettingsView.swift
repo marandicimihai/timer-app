@@ -124,7 +124,7 @@ struct SettingsView: View {
                 TextField("Minutes", value: value, format: .number)
                     .monospacedDigit()
                     .multilineTextAlignment(.trailing)
-                    .frame(width: 46)
+                    .frame(width: 72)
                     .accessibilityLabel(title)
                     .accessibilityValue("\(value.wrappedValue) minutes")
                     .accessibilityIdentifier("\(accessibilityIdentifier)Field")

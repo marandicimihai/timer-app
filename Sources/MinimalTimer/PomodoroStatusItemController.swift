@@ -6,15 +6,21 @@ import SwiftUI
 final class PomodoroStatusItemController: NSObject, ObservableObject {
     private let controller: TimerAppController
     private let preferences: MenuBarPreferences
+    private weak var detailWindowCoordinator: DetailWindowCoordinator?
     private var statusItem: NSStatusItem?
     private let popover: NSPopover
     private let hostingController: NSHostingController<PomodoroPopoverView>
     private var cancellables = Set<AnyCancellable>()
     private var hasStarted = false
 
-    init(controller: TimerAppController, preferences: MenuBarPreferences) {
+    init(
+        controller: TimerAppController,
+        preferences: MenuBarPreferences,
+        detailWindowCoordinator: DetailWindowCoordinator
+    ) {
         self.controller = controller
         self.preferences = preferences
+        self.detailWindowCoordinator = detailWindowCoordinator
         hostingController = NSHostingController(
             rootView: PomodoroPopoverView(controller: controller)
         )
@@ -70,16 +76,19 @@ final class PomodoroStatusItemController: NSObject, ObservableObject {
         completedPhase: PomodoroPhase?,
         isAwaitingNextPhase: Bool
     ) {
-        if !preferenceEnabled, popover.isShown {
+        let displaysIcon = Self.shouldDisplayIcon(
+            activePhase: phase,
+            isAwaitingNextPhase: isAwaitingNextPhase
+        )
+        if Self.shouldClosePopover(
+            preferenceEnabled: preferenceEnabled,
+            displaysIcon: displaysIcon
+        ), popover.isShown {
             popover.performClose(nil)
         }
         statusItem?.isVisible = Self.shouldReserveStatusItem(preferenceEnabled: preferenceEnabled)
 
         guard let button = statusItem?.button else { return }
-        let displaysIcon = Self.shouldDisplayIcon(
-            activePhase: phase,
-            isAwaitingNextPhase: isAwaitingNextPhase
-        )
         button.isEnabled = preferenceEnabled && displaysIcon
 
         guard preferenceEnabled, displaysIcon else {
@@ -98,7 +107,7 @@ final class PomodoroStatusItemController: NSObject, ObservableObject {
 
     private func createStatusItem() {
         precondition(statusItem == nil, "Pomodoro status item must only be created once")
-        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        let item = NSStatusBar.system.statusItem(withLength: NSStatusBar.system.thickness)
         guard let button = item.button else {
             NSStatusBar.system.removeStatusItem(item)
             return
@@ -120,6 +129,13 @@ final class PomodoroStatusItemController: NSObject, ObservableObject {
 
     static func shouldReserveStatusItem(preferenceEnabled: Bool) -> Bool {
         preferenceEnabled
+    }
+
+    static func shouldClosePopover(
+        preferenceEnabled: Bool,
+        displaysIcon: Bool
+    ) -> Bool {
+        !preferenceEnabled || !displaysIcon
     }
 
     static func shouldDisplayIcon(
@@ -162,12 +178,11 @@ final class PomodoroStatusItemController: NSObject, ObservableObject {
             return
         }
 
+        detailWindowCoordinator?.cancelPendingFocus()
         NotificationCenter.default.post(name: .minimalTimerPomodoroPopoverWillOpen, object: self)
         DispatchQueue.main.async { [weak self] in
             guard let self, let button = statusItem?.button else { return }
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-            NSApp.activate(ignoringOtherApps: true)
-            hostingController.view.window?.makeKey()
         }
     }
 

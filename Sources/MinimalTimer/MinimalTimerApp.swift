@@ -51,7 +51,8 @@ struct MinimalTimerApp: App {
     @StateObject private var pomodoroStatusItemController: PomodoroStatusItemController
 
     init() {
-        _detailWindowCoordinator = StateObject(wrappedValue: DetailWindowCoordinator())
+        let detailWindowCoordinator = DetailWindowCoordinator()
+        _detailWindowCoordinator = StateObject(wrappedValue: detailWindowCoordinator)
         do {
             let container = try ActivityPersistence().makeContainer()
             modelContainer = container
@@ -67,7 +68,8 @@ struct MinimalTimerApp: App {
             _pomodoroStatusItemController = StateObject(
                 wrappedValue: PomodoroStatusItemController(
                     controller: timerController,
-                    preferences: menuBarPreferences
+                    preferences: menuBarPreferences,
+                    detailWindowCoordinator: detailWindowCoordinator
                 )
             )
         } catch {

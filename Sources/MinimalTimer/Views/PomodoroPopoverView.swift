@@ -51,11 +51,20 @@ struct PomodoroPopoverView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Button("Start \(pomodoro.suggestedPhase.title)") {
-                controller.startSuggestedPomodoro()
+            HStack {
+                Button("Start \(pomodoro.suggestedPhase.title)") {
+                    controller.startSuggestedPomodoro()
+                }
+                .keyboardShortcut(.defaultAction)
+                .accessibilityIdentifier("startNextPomodoroButton")
+
+                Spacer()
+
+                Button("Stop Pomodoro", role: .destructive) {
+                    controller.stopPomodoro()
+                }
+                .accessibilityIdentifier("stopAwaitingPomodoroButton")
             }
-            .keyboardShortcut(.defaultAction)
-            .accessibilityIdentifier("startNextPomodoroButton")
         }
     }
 }

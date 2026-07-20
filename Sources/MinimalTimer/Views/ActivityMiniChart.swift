@@ -15,7 +15,6 @@ struct ActivityMiniChart: View {
     private static let tooltipWidth: CGFloat = 164
     private static let tooltipHeight: CGFloat = 42
 
-    private let colors: [Color] = [.blue, .orange, .green, .purple, .pink]
     private let legendColumns = [
         GridItem(.flexible(), spacing: 8),
         GridItem(.flexible(), spacing: 8)
@@ -62,10 +61,10 @@ struct ActivityMiniChart: View {
                 }
 
                 LazyVGrid(columns: legendColumns, alignment: .leading, spacing: 4) {
-                    ForEach(Array(activities.enumerated()), id: \.element.id) { index, activity in
+                    ForEach(activities) { activity in
                         HStack(spacing: 5) {
                             Circle()
-                                .fill(color(for: index, activity: activity))
+                                .fill(color(for: activity))
                                 .frame(width: 7, height: 7)
                             Text(activity.name)
                                 .font(.caption2)
@@ -180,12 +179,34 @@ struct ActivityMiniChart: View {
     }
 
     private func color(for activity: ActivitySeries) -> Color {
-        let index = activities.firstIndex { $0.id == activity.id } ?? 0
-        return color(for: index, activity: activity)
+        ActivityColorPalette.color(forActivityID: activity.id)
+    }
+}
+
+enum ActivityColorPalette {
+    private static let colors: [Color] = [.blue, .orange, .green, .purple, .pink]
+
+    static func color(forActivityID activityID: String) -> Color {
+        guard activityID != "aggregate:other" else { return .secondary }
+        return colors[paletteIndex(forActivityID: activityID)]
     }
 
-    private func color(for index: Int, activity: ActivitySeries) -> Color {
-        activity.id == "aggregate:other" ? .secondary : colors[index % colors.count]
+    static func color(forActivityNamed name: String) -> Color {
+        let activityID = normalizedIdentifier(for: name)
+        return color(forActivityID: activityID)
+    }
+
+    static func normalizedIdentifier(for name: String) -> String {
+        name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
+    static func paletteIndex(forActivityID activityID: String) -> Int {
+        var hash: UInt64 = 14_695_981_039_346_656_037
+        for byte in activityID.utf8 {
+            hash ^= UInt64(byte)
+            hash &*= 1_099_511_628_211
+        }
+        return Int(hash % UInt64(colors.count))
     }
 }
 

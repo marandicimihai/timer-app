@@ -86,6 +86,25 @@ func completionBannerActionStartsOnlyTheNextValidPhase() {
 }
 
 @Test @MainActor
+func stoppingWhileAwaitingTheNextPhaseDismissesTheMenuBarPrompt() {
+    var now = Date(timeIntervalSince1970: 1_000)
+    let settings = makeTestPomodoroSettings(focusMinutes: 1, breakMinutes: 1)
+    let pomodoro = PomodoroTimer(settings: settings, now: { now }, notifier: TestNotifier())
+
+    #expect(pomodoro.start(.focus))
+    now.addTimeInterval(60)
+    pomodoro.tick()
+    #expect(pomodoro.isAwaitingNextPhase)
+    #expect(pomodoro.suggestedPhase == .break)
+
+    pomodoro.stop()
+
+    #expect(pomodoro.activePhase == nil)
+    #expect(!pomodoro.isAwaitingNextPhase)
+    #expect(pomodoro.suggestedPhase == .break)
+}
+
+@Test @MainActor
 func stoppingAnInitialFocusPreparesFocusAgain() {
     let now = Date(timeIntervalSince1970: 1_000)
     let settings = makeTestPomodoroSettings(focusMinutes: 40, breakMinutes: 10)

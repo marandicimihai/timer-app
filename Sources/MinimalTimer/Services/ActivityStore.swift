@@ -89,8 +89,8 @@ struct ActivityDayStatistics: Identifiable, Equatable {
 struct ActivityStatistics: Identifiable, Equatable {
     let id: String
     let name: String
+    let days: [ActivityDayStatistics]
     let totalDuration: TimeInterval
-    let sessionCount: Int
     let activeDayCount: Int
     let currentStreak: Int
     let bestStreak: Int
@@ -102,7 +102,6 @@ struct ActivityStatisticsSnapshot: Equatable {
     let days: [ActivityDayStatistics]
     let activities: [ActivityStatistics]
     let totalDuration: TimeInterval
-    let sessionCount: Int
     let activeDayCount: Int
     let currentStreak: Int
     let bestStreak: Int
@@ -304,8 +303,7 @@ final class ActivityStore: ObservableObject {
             String: (
                 name: String,
                 latestStart: Date,
-                dailyDurations: [TimeInterval],
-                sessionCount: Int
+                dailyDurations: [TimeInterval]
             )
         ] = [:]
         var intervals = sessions.map { (name: $0.name, start: $0.startedAt, end: $0.endedAt) }
@@ -323,15 +321,13 @@ final class ActivityStore: ObservableObject {
                 ?? (
                     name: interval.name,
                     latestStart: interval.start,
-                    dailyDurations: Array(repeating: 0, count: dayCount),
-                    sessionCount: 0
+                    dailyDurations: Array(repeating: 0, count: dayCount)
                 )
             if interval.start > data.latestStart {
                 data.name = interval.name
                 data.latestStart = interval.start
             }
 
-            var overlapsPeriod = false
             for (index, day) in days.enumerated() {
                 let duration = overlapDuration(
                     from: interval.start,
@@ -340,10 +336,6 @@ final class ActivityStore: ObservableObject {
                     through: referenceDate
                 )
                 data.dailyDurations[index] += duration
-                overlapsPeriod = overlapsPeriod || duration > 0
-            }
-            if overlapsPeriod {
-                data.sessionCount += 1
             }
             activityData[normalizedName] = data
         }
@@ -355,8 +347,10 @@ final class ActivityStore: ObservableObject {
             return ActivityStatistics(
                 id: normalizedName,
                 name: data.name,
+                days: zip(days, data.dailyDurations).map {
+                    ActivityDayStatistics(day: $0.0, duration: $0.1)
+                },
                 totalDuration: totalDuration,
-                sessionCount: data.sessionCount,
                 activeDayCount: activeDayCount,
                 currentStreak: currentStreak(in: data.dailyDurations),
                 bestStreak: bestStreak(in: data.dailyDurations),
@@ -385,7 +379,6 @@ final class ActivityStore: ObservableObject {
             days: dayStatistics,
             activities: activities,
             totalDuration: dailyDurations.reduce(0, +),
-            sessionCount: activities.reduce(0) { $0 + $1.sessionCount },
             activeDayCount: dailyDurations.count(where: { $0 > 0 }),
             currentStreak: currentStreak(in: dailyDurations),
             bestStreak: bestStreak(in: dailyDurations)

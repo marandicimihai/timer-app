@@ -272,7 +272,6 @@ func activityStatisticsReportTimeConsistencyAndStreaks() throws {
     let statistics = store.activityStatistics(at: referenceDate, dayCount: 7)
 
     #expect(statistics.totalDuration == 6_000)
-    #expect(statistics.sessionCount == 5)
     #expect(statistics.activeDayCount == 5)
     #expect(statistics.currentStreak == 5)
     #expect(statistics.bestStreak == 5)
@@ -281,11 +280,12 @@ func activityStatisticsReportTimeConsistencyAndStreaks() throws {
 
     let writing = statistics.activities.first { $0.id == "writing" }
     #expect(writing?.totalDuration == 3_600)
-    #expect(writing?.sessionCount == 3)
     #expect(writing?.activeDayCount == 3)
     #expect(writing?.currentStreak == 0)
     #expect(writing?.bestStreak == 3)
     #expect(writing?.consistency == 3.0 / 7.0)
+    #expect(writing?.days.count == 7)
+    #expect(writing?.days.map(\.duration) == [0, 0, 600, 1_200, 1_800, 0, 0])
 
     let exercise = statistics.activities.first { $0.id == "exercise" }
     #expect(exercise?.currentStreak == 2)
@@ -311,4 +311,18 @@ func activityStatisticsKeepYesterdayStreakCurrentUntilTodayIsLogged() throws {
     let statistics = store.activityStatistics(at: referenceDate, dayCount: 7)
     #expect(statistics.currentStreak == 2)
     #expect(statistics.activities.first?.currentStreak == 2)
+}
+
+@Test
+func activityColorsStayStableAcrossNamesAndViews() {
+    let writingID = ActivityColorPalette.normalizedIdentifier(for: "  Writing  ")
+    let writingAgainID = ActivityColorPalette.normalizedIdentifier(for: "writing")
+
+    #expect(writingID == writingAgainID)
+    #expect(
+        ActivityColorPalette.paletteIndex(forActivityID: writingID)
+            == ActivityColorPalette.paletteIndex(forActivityID: writingAgainID)
+    )
+    #expect(ActivityColorPalette.paletteIndex(forActivityID: writingID) >= 0)
+    #expect(ActivityColorPalette.paletteIndex(forActivityID: writingID) < 5)
 }

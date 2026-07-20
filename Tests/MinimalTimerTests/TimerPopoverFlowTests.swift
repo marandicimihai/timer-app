@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import SwiftData
 import Testing
@@ -121,6 +122,14 @@ func menuBarTimerValueCanBeHiddenFromSettings() throws {
     )
     let controller = TimerAppController(activityStore: store, pomodoro: pomodoro, now: { clock.date })
 
+    #expect(!controller.showsTimerValueInMenuBar)
+
+    controller.startActivity(named: "Writing")
+    #expect(controller.showsTimerValueInMenuBar)
+
+    controller.finishActivity()
+    #expect(!controller.showsTimerValueInMenuBar)
+
     controller.startActivity(named: "Writing")
     #expect(controller.showsTimerValueInMenuBar)
 
@@ -148,6 +157,30 @@ func detailWindowButtonsSelectTheirRequestedTabs() throws {
 
     controller.showStatisticsTab()
     #expect(controller.selectedDetailWindowTab == .statistics)
+}
+
+@Test @MainActor
+func openingAMenuBarPopoverCancelsOnlyPendingDetailWindowFocus() {
+    let coordinator = DetailWindowCoordinator()
+
+    #expect(!coordinator.hasPendingFocusRequest)
+    coordinator.requestFocus()
+    #expect(coordinator.hasPendingFocusRequest)
+
+    coordinator.cancelPendingFocus()
+    #expect(!coordinator.hasPendingFocusRequest)
+}
+
+@Test @MainActor
+func statisticsUsesAMiniOverlayScrollbar() {
+    let scrollView = NSScrollView()
+    scrollView.verticalScroller = NSScroller()
+
+    StatisticsScrollAppearance.apply(to: scrollView)
+
+    #expect(scrollView.scrollerStyle == .overlay)
+    #expect(scrollView.autohidesScrollers)
+    #expect(scrollView.verticalScroller?.controlSize == .mini)
 }
 
 @Test @MainActor
@@ -197,6 +230,19 @@ func pomodoroMenuBarSpaceStaysReservedWhileItsIconReflectsTimerState() {
         PomodoroStatusItemController.shouldDisplayIcon(
             activePhase: nil,
             isAwaitingNextPhase: true
+        )
+    )
+
+    #expect(
+        PomodoroStatusItemController.shouldClosePopover(
+            preferenceEnabled: true,
+            displaysIcon: false
+        )
+    )
+    #expect(
+        !PomodoroStatusItemController.shouldClosePopover(
+            preferenceEnabled: true,
+            displaysIcon: true
         )
     )
 }

@@ -31,46 +31,43 @@ where you already look.
 
 ## Install
 
-### The quick route
+1. Open the repository's **Releases** page and download the latest
+   `MinimalTimer-x.y.z.zip` file.
+2. Double-click the downloaded ZIP to unpack it.
+3. Drag **Minimal Timer.app** into your **Applications** folder.
+4. Open it from Applications. Its timer icon will appear in the menu bar—there
+   is intentionally no Dock icon.
 
-You need **macOS 14 or later** and **Xcode 16+** (or the Xcode Command Line
-Tools).
+Minimal Timer requires **macOS 14 or later**. Click the menu-bar icon, name an
+activity, and press **Start**. For a focus session, use the Pomodoro controls
+in the same little popover.
 
-1. Download or clone this project, then open **Terminal**.
-2. Move into the project folder:
+### A quick security heads-up
 
-   ```sh
-   cd /path/to/timer-app
-   ```
+Minimal Timer is ad-hoc signed but is not yet Developer ID signed and notarized
+by Apple. macOS may therefore show a warning the first time you open a
+downloaded release. That warning is normal for the current build—but only
+continue if you downloaded the app from this repository's official Release
+page and trust it.
 
-3. Build and install it:
+If macOS blocks the app:
 
-   ```sh
-   ./scripts/install.sh
-   ```
+1. Try opening **Minimal Timer** once, then dismiss the warning.
+2. Go to **Apple menu → System Settings → Privacy & Security**.
+3. Scroll to **Security**, click **Open Anyway**, and confirm **Open**.
+4. Enter your Mac login password if asked.
 
-4. Open **Minimal Timer** from your personal `Applications` folder. You will
-   find its timer icon in the menu bar—there is intentionally no Dock icon.
-
-That is it. Click the menu-bar icon, type an activity, and press **Start
-Activity**. For a focus session, use **Start Focus** in the same popover.
-
-### Run it from Xcode instead
-
-Open [`Package.swift`](Package.swift) in Xcode and run the `MinimalTimer`
-scheme, or use:
-
-```sh
-swift run MinimalTimer
-```
+macOS will remember that choice for this copy of the app. For more context on
+the warning, see [Apple's guidance for opening an app from an unknown
+developer](https://support.apple.com/guide/mac-help/open-a-mac-app-from-an-unknown-developer-mh40616/mac).
 
 ## A small tour
 
 | When you want to… | Do this |
 | --- | --- |
-| Track a task | Enter its name and choose **Start Activity**. |
-| Move to the next task | Enter the next name and choose **Switch Activity**. |
-| Reuse something familiar | Choose it from **Recent**. |
+| Track a task | Enter its name and choose **Start**. |
+| Move to the next task | Finish the current activity, then start another. |
+| Reuse something familiar | Choose it from **Start a recent one**. |
 | Take a focused break from multitasking | Choose **Start Focus**. When it completes, start the suggested break (or the next focus session). |
 | See where the day went | Open **History** for daily totals and completed activities. |
 | Tune the timer | Open **Settings** to change durations, alerts, and menu-bar display. |
@@ -81,13 +78,7 @@ Minimal Timer stores completed activity history locally at
 `~/Library/Application Support/MinimalTimer/activity-history.sqlite`. It stays
 on your Mac; clearing history from the app removes those recorded activities.
 
-## For contributors
+## Build a release locally
 
-Run the test suite with:
-
-```sh
-swift test
-```
-
-The tests cover activity history, Pomodoro behavior, settings, notifications,
-and the menu-bar flow.
+Run `./scripts/bundle-release.sh`. The versioned ZIP and its SHA-256 checksum
+will be written to `dist/` using the version in `Packaging/Info.plist`.

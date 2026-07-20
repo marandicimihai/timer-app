@@ -13,17 +13,15 @@ struct TimerPopoverView: View {
             Text("Minimal Timer")
                 .font(.headline)
 
+            if let activity = controller.activityStore.activeActivity {
+                currentActivityStatus(activity)
+            }
+
             activityCard
             Divider()
             PomodoroMainControls(controller: controller)
             Divider()
             HStack {
-                Button("History") {
-                    controller.showHistoryTab()
-                    openDetailWindow()
-                }
-                .accessibilityIdentifier("historyButton")
-
                 Button("Settings") {
                     controller.showSettingsTab()
                     openDetailWindow()
@@ -40,6 +38,7 @@ struct TimerPopoverView: View {
         .padding(16)
         .frame(width: 330)
         .onAppear {
+            detailWindowCoordinator.cancelPendingFocus()
             NotificationCenter.default.post(name: .minimalTimerActivityPopoverDidOpen, object: nil)
             controller.refresh()
         }
@@ -99,28 +98,61 @@ struct TimerPopoverView: View {
                     }
                     .scrollIndicators(.hidden)
                 }
-            }
-
-            if let activity = controller.activityStore.activeActivity {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(activity.name)
-                        .lineLimit(1)
-                    Spacer()
-                    Text(DurationFormatter.clock(controller.currentDate.timeIntervalSince(activity.startedAt)))
-                        .font(.title3.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                }
-
-                Button("Finish Activity") {
-                    controller.finishActivity()
-                }
-                .accessibilityIdentifier("finishActivityButton")
+                .padding(.bottom, 6)
             }
 
             ActivityMiniChart(
                 overview: controller.activityStore.activityOverview(at: controller.currentDate)
             )
+            .padding(.top, 2)
         }
+    }
+
+    private func currentActivityStatus(_ activity: ActiveActivity) -> some View {
+        let activityColor = ActivityColorPalette.color(forActivityNamed: activity.name)
+
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(activityColor)
+                    .frame(width: 7, height: 7)
+                    .accessibilityHidden(true)
+
+                Text("Current activity")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+
+            HStack(alignment: .firstTextBaseline) {
+                Text(activity.name)
+                    .fontWeight(.medium)
+                    .lineLimit(1)
+
+                Spacer()
+
+                Text(DurationFormatter.clock(controller.currentDate.timeIntervalSince(activity.startedAt)))
+                    .font(.title3.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+
+            Button("Finish Activity") {
+                controller.finishActivity()
+            }
+            .controlSize(.small)
+            .accessibilityIdentifier("finishActivityButton")
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            activityColor.opacity(0.07),
+            in: RoundedRectangle(cornerRadius: 9, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .stroke(activityColor.opacity(0.2), lineWidth: 1)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Current activity: \(activity.name)")
     }
 
     private func startActivity() {
