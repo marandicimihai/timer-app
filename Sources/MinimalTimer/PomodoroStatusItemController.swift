@@ -86,7 +86,10 @@ final class PomodoroStatusItemController: NSObject, ObservableObject {
         ), popover.isShown {
             popover.performClose(nil)
         }
-        statusItem?.isVisible = Self.shouldReserveStatusItem(preferenceEnabled: preferenceEnabled)
+        statusItem?.isVisible = Self.shouldReserveStatusItem(
+            preferenceEnabled: preferenceEnabled,
+            displaysIcon: displaysIcon
+        )
 
         guard let button = statusItem?.button else { return }
         button.isEnabled = preferenceEnabled && displaysIcon
@@ -127,8 +130,11 @@ final class PomodoroStatusItemController: NSObject, ObservableObject {
         )
     }
 
-    static func shouldReserveStatusItem(preferenceEnabled: Bool) -> Bool {
-        preferenceEnabled
+    static func shouldReserveStatusItem(
+        preferenceEnabled: Bool,
+        displaysIcon: Bool
+    ) -> Bool {
+        preferenceEnabled && displaysIcon
     }
 
     static func shouldClosePopover(
