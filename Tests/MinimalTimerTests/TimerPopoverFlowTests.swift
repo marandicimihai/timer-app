@@ -204,9 +204,25 @@ func pomodoroMenuBarIconPreferenceDefaultsToEnabledAndPersists() throws {
 }
 
 @Test @MainActor
-func pomodoroMenuBarSpaceStaysReservedWhileItsIconReflectsTimerState() {
-    #expect(PomodoroStatusItemController.shouldReserveStatusItem(preferenceEnabled: true))
-    #expect(!PomodoroStatusItemController.shouldReserveStatusItem(preferenceEnabled: false))
+func pomodoroMenuBarItemOnlyUsesSpaceWhenItIsVisible() {
+    #expect(
+        PomodoroStatusItemController.shouldReserveStatusItem(
+            preferenceEnabled: true,
+            displaysIcon: true
+        )
+    )
+    #expect(
+        !PomodoroStatusItemController.shouldReserveStatusItem(
+            preferenceEnabled: true,
+            displaysIcon: false
+        )
+    )
+    #expect(
+        !PomodoroStatusItemController.shouldReserveStatusItem(
+            preferenceEnabled: false,
+            displaysIcon: true
+        )
+    )
 
     #expect(
         !PomodoroStatusItemController.shouldDisplayIcon(
