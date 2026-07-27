@@ -6,6 +6,7 @@ struct StatisticsView: View {
     private static let allActivitiesID = "statistics:all-activities"
 
     @EnvironmentObject private var controller: TimerAppController
+    @EnvironmentObject private var activityColorPreferences: ActivityColorPreferences
     @State private var selectedActivityID = ""
     @State private var selectedPeriod: StatisticsPeriod = .sevenDays
 
@@ -53,14 +54,16 @@ struct StatisticsView: View {
                         if showsAllActivities {
                             AllActivitiesLineChart(
                                 activities: statistics.activities,
-                                period: selectedPeriod
+                                period: selectedPeriod,
+                                customColors: activityColorPreferences.customColors
                             )
                         } else if let selectedActivity {
                             ActivityLineChart(
                                 activity: selectedActivity,
                                 period: selectedPeriod,
                                 color: ActivityColorPalette.color(
-                                    forActivityID: selectedActivity.id
+                                    forActivityID: selectedActivity.id,
+                                    customColors: activityColorPreferences.customColors
                                 )
                             )
                             selectedActivityInsights(selectedActivity)
@@ -173,6 +176,7 @@ struct StatisticsView: View {
 private struct AllActivitiesLineChart: View {
     let activities: [ActivityStatistics]
     let period: StatisticsPeriod
+    let customColors: [String: Color]
 
     private let legendColumns = [
         GridItem(.flexible(), spacing: 12),
@@ -221,7 +225,7 @@ private struct AllActivitiesLineChart: View {
                 }
             }
             .chartForegroundStyleScale(mapping: { (activityID: String) in
-                ActivityColorPalette.color(forActivityID: activityID)
+                ActivityColorPalette.color(forActivityID: activityID, customColors: customColors)
             })
             .chartLegend(.hidden)
             .chartXAxis {
@@ -252,7 +256,7 @@ private struct AllActivitiesLineChart: View {
                 ForEach(activities) { activity in
                     HStack(spacing: 6) {
                         Circle()
-                            .fill(ActivityColorPalette.color(forActivityID: activity.id))
+                            .fill(ActivityColorPalette.color(forActivityID: activity.id, customColors: customColors))
                             .frame(width: 8, height: 8)
                             .accessibilityHidden(true)
                         Text(activity.name)

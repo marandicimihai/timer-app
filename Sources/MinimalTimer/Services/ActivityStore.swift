@@ -20,6 +20,11 @@ struct ActivitySeries: Identifiable, Equatable {
     var weeklyDailyAverage: TimeInterval { sevenDayDuration / 7 }
 }
 
+struct KnownActivity: Identifiable, Equatable {
+    let id: String
+    let name: String
+}
+
 enum ActivityChartPeriod: String, CaseIterable, Identifiable {
     case today
     case yesterday
@@ -234,6 +239,33 @@ final class ActivityStore: ObservableObject {
             if names.count == limit { break }
         }
         return names
+    }
+
+    var knownActivities: [KnownActivity] {
+        var activityData: [String: (name: String, latestStart: Date)] = [:]
+
+        for session in sessions {
+            let id = normalizedActivityName(session.name)
+            guard !id.isEmpty else { continue }
+            if let existing = activityData[id], existing.latestStart >= session.startedAt {
+                continue
+            }
+            activityData[id] = (name: session.name, latestStart: session.startedAt)
+        }
+
+        if let activeActivity {
+            let id = normalizedActivityName(activeActivity.name)
+            if !id.isEmpty {
+                activityData[id] = (name: activeActivity.name, latestStart: activeActivity.startedAt)
+            }
+        }
+
+        return activityData.map { id, data in
+            KnownActivity(id: id, name: data.name)
+        }
+        .sorted {
+            $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+        }
     }
 
     func activityOverview(at referenceDate: Date) -> ActivityOverview {

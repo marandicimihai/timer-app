@@ -33,6 +33,7 @@ struct HistorySettingsWindowView: View {
 struct SettingsView: View {
     @EnvironmentObject private var controller: TimerAppController
     @EnvironmentObject private var menuBarPreferences: MenuBarPreferences
+    @EnvironmentObject private var activityColorPreferences: ActivityColorPreferences
     @State private var notificationAuthorizationStatus: UNAuthorizationStatus?
     @State private var notificationAlertStyle: UNAlertStyle?
 
@@ -97,10 +98,42 @@ struct SettingsView: View {
                 }
             }
 
+            Section("Appearance") {
+                if controller.activityStore.knownActivities.isEmpty {
+                    Text("Start or finish an activity to customize its color.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(controller.activityStore.knownActivities) { activity in
+                        LabeledContent(activity.name) {
+                            ColorPicker(
+                                "Color for \(activity.name)",
+                                selection: activityColorPreferences.colorBinding(
+                                    forActivityID: activity.id
+                                ),
+                                supportsOpacity: false
+                            )
+                            .labelsHidden()
+                            .accessibilityLabel("Color for \(activity.name)")
+                            .accessibilityIdentifier("activityColorPicker.\(activity.id)")
+                        }
+                    }
+                }
+
+                Text("Used for this activity in summaries and statistics charts.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Button("Reset Activity Colors") {
+                    activityColorPreferences.restoreDefaults()
+                }
+                .accessibilityIdentifier("resetActivityColorsButton")
+            }
+
             Section {
                 Button("Restore Defaults") {
                     controller.restorePomodoroSettings()
                     menuBarPreferences.restoreDefaults()
+                    activityColorPreferences.restoreDefaults()
                 }
                 .accessibilityIdentifier("restorePomodoroDefaultsButton")
             }
@@ -120,11 +153,16 @@ struct SettingsView: View {
         accessibilityIdentifier: String
     ) -> some View {
         LabeledContent(title) {
-            HStack(spacing: 6) {
-                TextField("Minutes", value: value, format: .number)
+            HStack(spacing: 5) {
+                Text("Minutes")
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+
+                TextField("", value: value, format: .number)
+                    .labelsHidden()
                     .monospacedDigit()
                     .multilineTextAlignment(.trailing)
-                    .frame(width: 72)
+                    .frame(width: 48)
                     .accessibilityLabel(title)
                     .accessibilityValue("\(value.wrappedValue) minutes")
                     .accessibilityIdentifier("\(accessibilityIdentifier)Field")
@@ -139,6 +177,7 @@ struct SettingsView: View {
                     .accessibilityValue("\(value.wrappedValue) minutes")
                     .accessibilityIdentifier(accessibilityIdentifier)
             }
+            .fixedSize(horizontal: true, vertical: false)
         }
     }
 

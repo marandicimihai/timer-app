@@ -4,6 +4,7 @@ import SwiftUI
 struct TimerPopoverView: View {
     @EnvironmentObject private var controller: TimerAppController
     @EnvironmentObject private var detailWindowCoordinator: DetailWindowCoordinator
+    @EnvironmentObject private var activityColorPreferences: ActivityColorPreferences
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openWindow) private var openWindow
     @State private var activityName = ""
@@ -102,14 +103,18 @@ struct TimerPopoverView: View {
             }
 
             ActivityMiniChart(
-                overview: controller.activityStore.activityOverview(at: controller.currentDate)
+                overview: controller.activityStore.activityOverview(at: controller.currentDate),
+                customColors: activityColorPreferences.customColors
             )
             .padding(.top, 2)
         }
     }
 
     private func currentActivityStatus(_ activity: ActiveActivity) -> some View {
-        let activityColor = ActivityColorPalette.color(forActivityNamed: activity.name)
+        let activityColor = ActivityColorPalette.color(
+            forActivityNamed: activity.name,
+            customColors: activityColorPreferences.customColors
+        )
 
         return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {

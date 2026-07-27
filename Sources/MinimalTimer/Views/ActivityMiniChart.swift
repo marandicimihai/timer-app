@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ActivityMiniChart: View {
     let overview: ActivityOverview
+    let customColors: [String: Color]
 
     @State private var hoveredBar: HoveredBar?
 
@@ -179,34 +180,45 @@ struct ActivityMiniChart: View {
     }
 
     private func color(for activity: ActivitySeries) -> Color {
-        ActivityColorPalette.color(forActivityID: activity.id)
+        ActivityColorPalette.color(forActivityID: activity.id, customColors: customColors)
     }
 }
 
 enum ActivityColorPalette {
-    private static let colors: [Color] = [.blue, .orange, .green, .purple, .pink]
+    static let defaultColors: [Color] = [.blue, .orange, .green, .purple, .pink]
 
-    static func color(forActivityID activityID: String) -> Color {
+    static func color(
+        forActivityID activityID: String,
+        customColors: [String: Color] = [:]
+    ) -> Color {
         guard activityID != "aggregate:other" else { return .secondary }
-        return colors[paletteIndex(forActivityID: activityID)]
+        return customColors[activityID]
+            ?? defaultColors[paletteIndex(forActivityID: activityID)]
     }
 
-    static func color(forActivityNamed name: String) -> Color {
+    static func color(
+        forActivityNamed name: String,
+        customColors: [String: Color] = [:]
+    ) -> Color {
         let activityID = normalizedIdentifier(for: name)
-        return color(forActivityID: activityID)
+        return color(forActivityID: activityID, customColors: customColors)
     }
 
     static func normalizedIdentifier(for name: String) -> String {
         name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 
-    static func paletteIndex(forActivityID activityID: String) -> Int {
+    static func paletteIndex(
+        forActivityID activityID: String,
+        colorCount: Int = defaultColors.count
+    ) -> Int {
+        guard colorCount > 0 else { return 0 }
         var hash: UInt64 = 14_695_981_039_346_656_037
         for byte in activityID.utf8 {
             hash ^= UInt64(byte)
             hash &*= 1_099_511_628_211
         }
-        return Int(hash % UInt64(colors.count))
+        return Int(hash % UInt64(colorCount))
     }
 }
 
