@@ -15,7 +15,6 @@ final class TimerAppController: ObservableObject {
     @Published var selectedDetailWindowTab: DetailWindowTab = .history
 
     private let now: () -> Date
-    private var refreshCancellable: AnyCancellable?
 
     init(
         activityStore: ActivityStore,
@@ -26,12 +25,8 @@ final class TimerAppController: ObservableObject {
         self.pomodoro = pomodoro
         self.now = now
         self.currentDate = now()
-        refreshCancellable = Timer.publish(every: 1, on: .main, in: .common)
-            .autoconnect()
-            .sink { [weak self] date in
-                guard let self, self.isTimerRunning else { return }
-                self.refresh(at: date)
-            }
+        // Clock displays own their timelines. Publishing a date here every
+        // second also rebuilds app scenes, history, and hidden statistics.
     }
 
     var isTimerRunning: Bool {

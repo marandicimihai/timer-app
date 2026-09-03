@@ -102,10 +102,12 @@ struct TimerPopoverView: View {
                 .padding(.bottom, 6)
             }
 
-            ActivityMiniChart(
-                overview: controller.activityStore.activityOverview(at: controller.currentDate),
-                customColors: activityColorPreferences.customColors
-            )
+            TimelineView(.everyMinute) { context in
+                ActivityMiniChart(
+                    overview: controller.activityStore.activityOverview(at: max(context.date, controller.currentDate)),
+                    customColors: activityColorPreferences.customColors
+                )
+            }
             .padding(.top, 2)
         }
     }
@@ -135,9 +137,11 @@ struct TimerPopoverView: View {
 
                 Spacer()
 
-                Text(DurationFormatter.clock(controller.currentDate.timeIntervalSince(activity.startedAt)))
-                    .font(.title3.monospacedDigit())
-                    .foregroundStyle(.secondary)
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    Text(DurationFormatter.clock(context.date.timeIntervalSince(activity.startedAt)))
+                        .font(.title3.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Button("Finish Activity") {
@@ -203,7 +207,9 @@ private struct PomodoroMainControls: View {
                     .accessibilityIdentifier("stopPomodoroButton")
                 }
 
-                ProgressView(value: pomodoro.progress(at: controller.currentDate))
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    ProgressView(value: pomodoro.progress(at: context.date))
+                }
             } else {
                 if pomodoro.isAwaitingNextPhase, let completedPhase = pomodoro.completedPhase {
                     Text("\(completedPhase.title) complete")

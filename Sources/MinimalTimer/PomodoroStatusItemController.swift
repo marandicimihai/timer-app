@@ -11,6 +11,7 @@ final class PomodoroStatusItemController: NSObject, ObservableObject {
     private let popover: NSPopover
     private let hostingController: NSHostingController<PomodoroPopoverView>
     private var cancellables = Set<AnyCancellable>()
+    private var progressCancellable: AnyCancellable?
     private var hasStarted = false
 
     init(
@@ -56,13 +57,6 @@ final class PomodoroStatusItemController: NSObject, ObservableObject {
             }
             .store(in: &cancellables)
 
-        controller.$currentDate
-            .sink { [weak self] date in
-                guard let self, let phase = controller.pomodoro.activePhase else { return }
-                updateIcon(at: date, phase: phase)
-            }
-            .store(in: &cancellables)
-
         NotificationCenter.default.publisher(for: .minimalTimerActivityPopoverDidOpen)
             .sink { [weak self] _ in
                 self?.closePopover()
@@ -76,6 +70,19 @@ final class PomodoroStatusItemController: NSObject, ObservableObject {
         completedPhase: PomodoroPhase?,
         isAwaitingNextPhase: Bool
     ) {
+        if preferenceEnabled, phase != nil {
+            if progressCancellable == nil {
+                progressCancellable = Timer.publish(every: 1, tolerance: 0.1, on: .main, in: .common)
+                    .autoconnect()
+                    .sink { [weak self] date in
+                        guard let self, let phase = controller.pomodoro.activePhase else { return }
+                        updateIcon(at: date, phase: phase)
+                    }
+            }
+        } else {
+            progressCancellable = nil
+        }
+
         let displaysIcon = Self.shouldDisplayIcon(
             activePhase: phase,
             isAwaitingNextPhase: isAwaitingNextPhase
@@ -102,7 +109,7 @@ final class PomodoroStatusItemController: NSObject, ObservableObject {
         }
 
         updateIcon(
-            at: controller.currentDate,
+            at: Date(),
             phase: phase,
             completedPhase: completedPhase
         )

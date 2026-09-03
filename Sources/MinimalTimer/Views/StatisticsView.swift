@@ -3,19 +3,33 @@ import Charts
 import SwiftUI
 
 struct StatisticsView: View {
-    private static let allActivitiesID = "statistics:all-activities"
-
     @EnvironmentObject private var controller: TimerAppController
-    @EnvironmentObject private var activityColorPreferences: ActivityColorPreferences
     @State private var selectedActivityID = ""
     @State private var selectedPeriod: StatisticsPeriod = .sevenDays
 
-    private var statistics: ActivityStatisticsSnapshot {
-        controller.activityStore.activityStatistics(
-            at: controller.currentDate,
-            dayCount: selectedPeriod.dayCount
-        )
+    var body: some View {
+        TimelineView(.everyMinute) { context in
+            StatisticsContentView(
+                statistics: controller.activityStore.activityStatistics(
+                    at: max(context.date, controller.currentDate),
+                    dayCount: selectedPeriod.dayCount
+                ),
+                selectedActivityID: $selectedActivityID,
+                selectedPeriod: $selectedPeriod
+            )
+        }
+        .onAppear { controller.refresh() }
     }
+}
+
+private struct StatisticsContentView: View {
+    private static let allActivitiesID = "statistics:all-activities"
+
+    @EnvironmentObject private var activityColorPreferences: ActivityColorPreferences
+    // Share one snapshot across the picker, charts, and totals for this render.
+    let statistics: ActivityStatisticsSnapshot
+    @Binding var selectedActivityID: String
+    @Binding var selectedPeriod: StatisticsPeriod
 
     private var selectedActivity: ActivityStatistics? {
         guard selectedActivityID != Self.allActivitiesID else { return nil }
@@ -79,7 +93,6 @@ struct StatisticsView: View {
         .navigationTitle("Statistics")
         .accessibilityIdentifier("statisticsView")
         .onAppear {
-            controller.refresh()
             if selectedActivityID.isEmpty {
                 selectedActivityID = statistics.activities.first?.id ?? ""
             }

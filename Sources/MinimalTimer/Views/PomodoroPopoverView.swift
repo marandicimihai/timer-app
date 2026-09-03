@@ -30,12 +30,16 @@ struct PomodoroPopoverView: View {
             HStack {
                 Text(phase.title)
                 Spacer()
-                Text(DurationFormatter.clock(pomodoro.remainingDuration(at: controller.currentDate)))
-                    .font(.title3.monospacedDigit())
-                    .foregroundStyle(.secondary)
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    Text(DurationFormatter.clock(pomodoro.remainingDuration(at: context.date)))
+                        .font(.title3.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
             }
 
-            ProgressView(value: pomodoro.progress(at: controller.currentDate))
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                ProgressView(value: pomodoro.progress(at: context.date))
+            }
 
             Button("Stop Pomodoro", role: .destructive) {
                 controller.stopPomodoro()
