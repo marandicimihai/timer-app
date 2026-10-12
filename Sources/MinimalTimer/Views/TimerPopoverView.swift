@@ -20,9 +20,11 @@ struct TimerPopoverView: View {
 
             activityCard
             WeeklyGoalsView(activityStore: controller.activityStore, referenceDate: controller.currentDate)
-            Divider()
-            PomodoroMainControls(controller: controller)
-            Divider()
+            if controller.pomodoro.settings.isEnabled {
+                Divider()
+                PomodoroMainControls(controller: controller)
+                Divider()
+            }
             HStack {
                 Button("Settings") {
                     controller.showSettingsTab()
@@ -94,6 +96,7 @@ struct TimerPopoverView: View {
                                     Button("Delete Activity and History", role: .destructive) {
                                         controller.deleteActivityHistory(named: name)
                                     }
+                                    .disabled(controller.activityStore.isArchived(activityNamed: name))
                                 }
                             }
                         }

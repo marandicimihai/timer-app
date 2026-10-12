@@ -1,10 +1,35 @@
 import Combine
 import Foundation
 
-enum DetailWindowTab: Hashable {
-    case history
-    case statistics
+enum DetailWindowTab: Hashable, CaseIterable {
     case settings
+    case statistics
+    case goals
+    case manageActivities
+    case pomodoro
+    case history
+
+    var title: String {
+        switch self {
+        case .settings: "Settings"
+        case .statistics: "Statistics"
+        case .goals: "Goals"
+        case .manageActivities: "Manage activities"
+        case .pomodoro: "Pomodoro"
+        case .history: "History"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .settings: "gearshape"
+        case .statistics: "chart.bar.xaxis"
+        case .goals: "target"
+        case .manageActivities: "archivebox"
+        case .pomodoro: "circle.circle"
+        case .history: "clock.arrow.circlepath"
+        }
+    }
 }
 
 @MainActor
@@ -12,9 +37,10 @@ final class TimerAppController: ObservableObject {
     let activityStore: ActivityStore
     let pomodoro: PomodoroTimer
     @Published private(set) var currentDate: Date
-    @Published var selectedDetailWindowTab: DetailWindowTab = .history
+    @Published var selectedDetailWindowTab: DetailWindowTab = .settings
 
     private let now: () -> Date
+    private var archiveCancellable: AnyCancellable?
 
     init(
         activityStore: ActivityStore,
@@ -25,6 +51,9 @@ final class TimerAppController: ObservableObject {
         self.pomodoro = pomodoro
         self.now = now
         self.currentDate = now()
+        archiveCancellable = activityStore.archivePreferences.objectWillChange.sink { [weak self] _ in
+            self?.objectWillChange.send()
+        }
         // Clock displays own their timelines. Publishing a date here every
         // second also rebuilds app scenes, history, and hidden statistics.
     }
@@ -82,6 +111,20 @@ final class TimerAppController: ObservableObject {
         objectWillChange.send()
     }
 
+    func archiveActivity(named name: String) {
+        _ = activityStore.archiveActivity(named: name)
+    }
+
+    func unarchiveActivity(id: String) {
+        activityStore.archivePreferences.unarchiveActivity(id: id)
+    }
+
+    func setPomodoroEnabled(_ enabled: Bool) {
+        if !enabled { pomodoro.stop() }
+        pomodoro.settings.setEnabled(enabled)
+        objectWillChange.send()
+    }
+
     func showHistoryTab() {
         selectedDetailWindowTab = .history
     }
@@ -120,7 +163,7 @@ final class TimerAppController: ObservableObject {
     }
 
     func restorePomodoroSettings() {
-        pomodoro.settings.restoreDefaults()
+        pomodoro.settings.restorePomodoroDefaults()
         pomodoro.refreshIdleDurationFromSettings()
         objectWillChange.send()
     }

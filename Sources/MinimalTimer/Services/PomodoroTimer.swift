@@ -156,7 +156,7 @@ final class PomodoroTimer: ObservableObject {
     }
 
     func canStart(_ phase: PomodoroPhase) -> Bool {
-        activePhase == nil && phase == suggestedPhase
+        settings.isEnabled && activePhase == nil && phase == suggestedPhase
     }
 
     @discardableResult
@@ -192,6 +192,10 @@ final class PomodoroTimer: ObservableObject {
     }
 
     func tick(at date: Date? = nil) {
+        guard settings.isEnabled else {
+            stop()
+            return
+        }
         guard let activePhase, let startedAt, let activeDuration else { return }
         let elapsed = max(0, (date ?? now()).timeIntervalSince(startedAt))
         remainingDuration = max(0, activeDuration - elapsed)
@@ -218,7 +222,7 @@ final class PomodoroTimer: ObservableObject {
     }
 
     func requestNotificationAuthorizationIfNeeded() {
-        guard settings.notificationsEnabled else { return }
+        guard settings.isEnabled, settings.notificationsEnabled else { return }
         notifier.requestAuthorizationIfNeeded()
     }
 }

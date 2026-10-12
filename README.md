@@ -70,19 +70,28 @@ developer](https://support.apple.com/guide/mac-help/open-a-mac-app-from-an-unkno
 | Reuse something familiar | Choose it from **Start a recent one**. |
 | Take a focused break from multitasking | Choose **Start Focus**. When it completes, start the suggested break (or the next focus session). |
 | See where the day went | Open **History** for daily totals and completed activities. |
-| Tune the timer | Open **Settings** to change durations, alerts, and menu-bar display. |
-| Set a weekly goal | In **Settings → Weekly goals**, enable an activity and enter its target hours. Progress appears below the menu-bar chart. |
+| Change the menu-bar display | Open **Settings** to show or hide the activity time. |
+| Set a weekly goal | In **Goals**, enable an activity and enter its target hours. Progress appears below the menu-bar chart. |
+| Manage activity colors and archives | Open **Manage activities** to change colors, archive activities, or unarchive them. |
+| Tune or disable Pomodoro | Open **Pomodoro** to change durations, alerts, its menu-bar icon, or turn Pomodoro off entirely. |
 
 Weekly goals run Monday–Sunday in your local time zone and include time from a
 running activity. Progress is red below 20%, yellow from 20% to below 70%, and
 green from 70% onward. Targets stay saved between launches and can be edited or
-turned off in Settings.
+turned off in Goals.
+
+Archived activities keep their history, chart visibility, colors, and existing
+goals. Their colors, goals, and history stay read-only until you unarchive them.
+Starting an activity with the same name (ignoring case and surrounding spaces)
+automatically unarchives it. Turning off Pomodoro stops its timer and removes
+its controls and icon from the menu bar.
 
 ## Your data
 
 Minimal Timer stores completed activity history locally at
 `~/Library/Application Support/MinimalTimer/activity-history.sqlite`. It stays
-on your Mac; clearing history from the app removes those recorded activities.
+on your Mac; clearing history removes entries for unarchived activities while
+preserving archived activity history.
 
 ## Build a release locally
 

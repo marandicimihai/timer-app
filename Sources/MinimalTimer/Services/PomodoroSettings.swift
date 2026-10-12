@@ -36,6 +36,7 @@ final class PomodoroSettings: ObservableObject {
     static let defaultBreakDurationMinutes = 5
     static let defaultNotificationsEnabled = true
     static let defaultShowTimerValueInMenuBar = true
+    static let defaultEnabled = true
 
     static let focusDurationRange = 1...180
     static let breakDurationRange = 1...60
@@ -44,6 +45,7 @@ final class PomodoroSettings: ObservableObject {
     @Published private(set) var breakDurationMinutes: Int
     @Published private(set) var notificationsEnabled: Bool
     @Published private(set) var showTimerValueInMenuBar: Bool
+    @Published private(set) var isEnabled: Bool
 
     private let userDefaults: UserDefaults?
 
@@ -52,10 +54,16 @@ final class PomodoroSettings: ObservableObject {
         static let breakDurationMinutes = "pomodoro.breakDurationMinutes"
         static let notificationsEnabled = "pomodoro.notificationsEnabled"
         static let showTimerValueInMenuBar = "menuBar.showTimerValue"
+        static let isEnabled = "pomodoro.isEnabled"
     }
 
     init(userDefaults: UserDefaults? = .standard) {
         self.userDefaults = userDefaults
+        isEnabled = Self.storedBoolean(
+            forKey: Key.isEnabled,
+            in: userDefaults,
+            defaultValue: Self.defaultEnabled
+        )
         focusDurationMinutes = Self.storedInteger(
             forKey: Key.focusDurationMinutes,
             in: userDefaults,
@@ -111,10 +119,21 @@ final class PomodoroSettings: ObservableObject {
         userDefaults?.set(enabled, forKey: Key.showTimerValueInMenuBar)
     }
 
-    func restoreDefaults() {
+    func setEnabled(_ enabled: Bool) {
+        guard enabled != isEnabled else { return }
+        isEnabled = enabled
+        userDefaults?.set(enabled, forKey: Key.isEnabled)
+    }
+
+    func restorePomodoroDefaults() {
+        setEnabled(Self.defaultEnabled)
         setFocusDurationMinutes(Self.defaultFocusDurationMinutes)
         setBreakDurationMinutes(Self.defaultBreakDurationMinutes)
         setNotificationsEnabled(Self.defaultNotificationsEnabled)
+    }
+
+    func restoreDefaults() {
+        restorePomodoroDefaults()
         setShowTimerValueInMenuBar(Self.defaultShowTimerValueInMenuBar)
     }
 

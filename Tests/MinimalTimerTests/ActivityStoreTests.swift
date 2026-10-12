@@ -13,10 +13,19 @@ final class TestClock {
 }
 
 @MainActor
-func makeStore(clock: TestClock, calendar: Calendar = .current) throws -> ActivityStore {
+func makeStore(
+    clock: TestClock,
+    calendar: Calendar = .current,
+    archivePreferences: ActivityArchivePreferences? = nil
+) throws -> ActivityStore {
     let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
     let container = try ModelContainer(for: ActivitySession.self, configurations: configuration)
-    return ActivityStore(modelContext: container.mainContext, now: { clock.date }, calendar: calendar)
+    return ActivityStore(
+        modelContext: container.mainContext,
+        now: { clock.date },
+        calendar: calendar,
+        archivePreferences: archivePreferences
+    )
 }
 
 @Test @MainActor

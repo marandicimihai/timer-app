@@ -6,10 +6,12 @@ final class ActivityColorPreferences: ObservableObject {
     @Published private(set) var customColors: [String: Color]
 
     private let userDefaults: UserDefaults?
+    private let archivePreferences: ActivityArchivePreferences?
     private static let customColorsKey = "activityColors.custom"
 
-    init(userDefaults: UserDefaults? = .standard) {
+    init(userDefaults: UserDefaults? = .standard, archivePreferences: ActivityArchivePreferences? = nil) {
         self.userDefaults = userDefaults
+        self.archivePreferences = archivePreferences
         customColors = Self.storedColors(in: userDefaults).reduce(into: [:]) { colors, entry in
             colors[entry.key] = Color(
                 nsColor: NSColor(
@@ -34,14 +36,22 @@ final class ActivityColorPreferences: ObservableObject {
     }
 
     func setColor(_ color: Color, forActivityID activityID: String) {
-        guard activityID != "aggregate:other", let rgba = Self.rgbaComponents(for: color) else { return }
+        guard activityID != "aggregate:other", archivePreferences?.isArchived(activityID) != true,
+              let rgba = Self.rgbaComponents(for: color) else { return }
         customColors[activityID] = color
         saveCustomColors(replacing: activityID, with: rgba)
     }
 
     func restoreDefaults() {
-        customColors = [:]
-        userDefaults?.removeObject(forKey: Self.customColorsKey)
+        customColors = customColors.filter { archivePreferences?.isArchived($0.key) == true }
+        let storedColors = Self.storedColors(in: userDefaults).filter {
+            archivePreferences?.isArchived($0.key) == true
+        }
+        if storedColors.isEmpty {
+            userDefaults?.removeObject(forKey: Self.customColorsKey)
+        } else if let data = try? JSONEncoder().encode(storedColors) {
+            userDefaults?.set(data, forKey: Self.customColorsKey)
+        }
     }
 
     private func saveCustomColors(replacing activityID: String, with rgba: RGBA) {

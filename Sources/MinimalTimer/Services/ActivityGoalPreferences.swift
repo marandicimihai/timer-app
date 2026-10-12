@@ -33,9 +33,11 @@ final class ActivityGoalPreferences: ObservableObject {
     static let hoursRange = 0.1...168.0
     private static let storageKey = "activityGoals.weekly"
     private let userDefaults: UserDefaults?
+    private let archivePreferences: ActivityArchivePreferences?
 
-    init(userDefaults: UserDefaults? = .standard) {
+    init(userDefaults: UserDefaults? = .standard, archivePreferences: ActivityArchivePreferences? = nil) {
         self.userDefaults = userDefaults
+        self.archivePreferences = archivePreferences
         if let data = userDefaults?.data(forKey: Self.storageKey),
            let stored = try? JSONDecoder().decode([WeeklyActivityGoal].self, from: data) {
             var seen: Set<String> = []
@@ -55,7 +57,8 @@ final class ActivityGoalPreferences: ObservableObject {
     func setGoal(hours: Double, forActivityNamed rawName: String) {
         let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
         let id = ActivityColorPalette.normalizedIdentifier(for: name)
-        guard !id.isEmpty, hours.isFinite, Self.hoursRange.contains(hours) else { return }
+        guard !id.isEmpty, archivePreferences?.isArchived(id) != true,
+              hours.isFinite, Self.hoursRange.contains(hours) else { return }
         let goal = WeeklyActivityGoal(id: id, name: name, hours: hours)
         if let index = goals.firstIndex(where: { $0.id == id }) {
             goals[index] = goal
@@ -67,6 +70,7 @@ final class ActivityGoalPreferences: ObservableObject {
     }
 
     func removeGoal(forActivityID id: String) {
+        guard archivePreferences?.isArchived(id) != true else { return }
         goals.removeAll { $0.id == id }
         save()
     }

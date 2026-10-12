@@ -33,6 +33,7 @@ struct HistoryView: View {
                                 Button("Delete Entry", role: .destructive) {
                                     controller.deleteActivitySession(id: session.id)
                                 }
+                                .disabled(controller.activityStore.isArchived(activityNamed: session.name))
                             }
                         }
                     } header: {
@@ -47,20 +48,31 @@ struct HistoryView: View {
         }
         .navigationTitle("History")
         .toolbar {
-            if !controller.activityStore.sessions.isEmpty {
-                Button("Clear History", role: .destructive) {
+            if hasUnarchivedHistory {
+                Button(clearHistoryTitle, role: .destructive) {
                     showingClearConfirmation = true
                 }
                 .accessibilityIdentifier("clearHistoryButton")
             }
         }
-        .alert("Clear all activity history?", isPresented: $showingClearConfirmation) {
-            Button("Clear History", role: .destructive) {
+        .alert("\(clearHistoryTitle)?", isPresented: $showingClearConfirmation) {
+            Button(clearHistoryTitle, role: .destructive) {
                 controller.clearActivityHistory()
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This removes all completed activities and daily totals from this Mac.")
+            Text("This removes completed entries for unarchived activities. Archived activity history is kept.")
         }
+    }
+
+    private var hasUnarchivedHistory: Bool {
+        controller.activityStore.sessions.contains {
+            !controller.activityStore.isArchived(activityNamed: $0.name)
+        }
+    }
+
+    private var clearHistoryTitle: String {
+        controller.activityStore.archivePreferences.archivedActivities.isEmpty
+            ? "Clear History" : "Clear Unarchived History"
     }
 }

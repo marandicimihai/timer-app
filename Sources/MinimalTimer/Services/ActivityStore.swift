@@ -20,7 +20,7 @@ struct ActivitySeries: Identifiable, Equatable {
     var weeklyDailyAverage: TimeInterval { sevenDayDuration / 7 }
 }
 
-struct KnownActivity: Identifiable, Equatable {
+struct KnownActivity: Codable, Identifiable, Equatable {
     let id: String
     let name: String
 }
@@ -126,6 +126,7 @@ struct ActivityStatisticsSnapshot: Equatable {
 final class ActivityStore: ObservableObject {
     @Published private(set) var activeActivity: ActiveActivity?
     @Published private(set) var sessions: [ActivitySession] = []
+    let archivePreferences: ActivityArchivePreferences
 
     private let modelContainer: ModelContainer
     private let modelContext: ModelContext
@@ -135,18 +136,22 @@ final class ActivityStore: ObservableObject {
     init(
         modelContext: ModelContext,
         now: @escaping () -> Date = Date.init,
-        calendar: Calendar = .current
+        calendar: Calendar = .current,
+        archivePreferences: ActivityArchivePreferences? = nil
     ) {
         self.modelContainer = modelContext.container
         self.modelContext = modelContext
         self.now = now
         self.calendar = calendar
+        self.archivePreferences = archivePreferences ?? ActivityArchivePreferences(userDefaults: nil)
         reloadHistory()
     }
 
     func startActivity(named rawName: String, at date: Date? = nil) {
         let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { return }
+
+        archivePreferences.unarchiveActivity(id: normalizedActivityName(name))
 
         if activeActivity != nil {
             _ = finishActivity(at: date ?? now())
@@ -176,16 +181,19 @@ final class ActivityStore: ObservableObject {
     }
 
     func clearHistory() {
-        for session in sessions {
+        let removable = sessions.filter { !isArchived(activityNamed: $0.name) }
+        for session in removable {
             modelContext.delete(session)
         }
         saveHistory()
-        sessions = []
+        let removedIDs = Set(removable.map(\.id))
+        sessions.removeAll { removedIDs.contains($0.id) }
     }
 
     @discardableResult
     func deleteSession(id: UUID) -> Bool {
-        guard let session = sessions.first(where: { $0.id == id }) else { return false }
+        guard let session = sessions.first(where: { $0.id == id }),
+              !isArchived(activityNamed: session.name) else { return false }
         modelContext.delete(session)
         saveHistory()
         sessions.removeAll { $0.id == id }
@@ -195,7 +203,7 @@ final class ActivityStore: ObservableObject {
     @discardableResult
     func deleteActivityHistory(named rawName: String) -> Int {
         let normalizedName = normalizedActivityName(rawName)
-        guard !normalizedName.isEmpty else { return 0 }
+        guard !normalizedName.isEmpty, !archivePreferences.isArchived(normalizedName) else { return 0 }
 
         let matchingSessions = sessions.filter {
             normalizedActivityName($0.name) == normalizedName
@@ -244,6 +252,10 @@ final class ActivityStore: ObservableObject {
     var knownActivities: [KnownActivity] {
         var activityData: [String: (name: String, latestStart: Date)] = [:]
 
+        for activity in archivePreferences.archivedActivities {
+            activityData[activity.id] = (name: activity.name, latestStart: .distantPast)
+        }
+
         for session in sessions {
             let id = normalizedActivityName(session.name)
             guard !id.isEmpty else { continue }
@@ -269,6 +281,19 @@ final class ActivityStore: ObservableObject {
         .map { id, data in
             KnownActivity(id: id, name: data.name)
         }
+    }
+
+    func isArchived(activityNamed name: String) -> Bool {
+        archivePreferences.isArchived(normalizedActivityName(name))
+    }
+
+    @discardableResult
+    func archiveActivity(named name: String) -> Bool {
+        let id = normalizedActivityName(name)
+        guard !id.isEmpty,
+              activeActivity.map({ normalizedActivityName($0.name) }) != id else { return false }
+        archivePreferences.archiveActivity(named: name)
+        return true
     }
 
     func weeklyGoalProgress(

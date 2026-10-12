@@ -47,9 +47,11 @@ final class PomodoroStatusItemController: NSObject, ObservableObject {
             controller.pomodoro.$completedPhase,
             controller.pomodoro.$isAwaitingNextPhase
         )
-            .sink { [weak self] preferenceEnabled, phase, completedPhase, isAwaitingNextPhase in
+            .combineLatest(controller.pomodoro.settings.$isEnabled)
+            .sink { [weak self] state, isEnabled in
+                let (preferenceEnabled, phase, completedPhase, isAwaitingNextPhase) = state
                 self?.updateStatusItem(
-                    preferenceEnabled: preferenceEnabled,
+                    preferenceEnabled: preferenceEnabled && isEnabled,
                     phase: phase,
                     completedPhase: completedPhase,
                     isAwaitingNextPhase: isAwaitingNextPhase
@@ -130,7 +132,7 @@ final class PomodoroStatusItemController: NSObject, ObservableObject {
         button.setAccessibilityLabel("Pomodoro timer")
         statusItem = item
         updateStatusItem(
-            preferenceEnabled: preferences.showsPomodoroIcon,
+            preferenceEnabled: preferences.showsPomodoroIcon && controller.pomodoro.settings.isEnabled,
             phase: controller.pomodoro.activePhase,
             completedPhase: controller.pomodoro.completedPhase,
             isAwaitingNextPhase: controller.pomodoro.isAwaitingNextPhase
@@ -185,7 +187,8 @@ final class PomodoroStatusItemController: NSObject, ObservableObject {
     }
 
     @objc private func togglePopover(_ sender: Any?) {
-        guard statusItem?.button != nil else { return }
+        guard controller.pomodoro.settings.isEnabled, preferences.showsPomodoroIcon,
+              statusItem?.button != nil else { return }
         if popover.isShown {
             popover.performClose(sender)
             return
