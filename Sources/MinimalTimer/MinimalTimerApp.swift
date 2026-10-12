@@ -49,6 +49,7 @@ struct MinimalTimerApp: App {
     @StateObject private var detailWindowCoordinator: DetailWindowCoordinator
     @StateObject private var menuBarPreferences: MenuBarPreferences
     @StateObject private var activityColorPreferences: ActivityColorPreferences
+    @StateObject private var activityGoalPreferences: ActivityGoalPreferences
     @StateObject private var pomodoroStatusItemController: PomodoroStatusItemController
 
     init() {
@@ -68,6 +69,7 @@ struct MinimalTimerApp: App {
             _controller = StateObject(wrappedValue: timerController)
             _menuBarPreferences = StateObject(wrappedValue: menuBarPreferences)
             _activityColorPreferences = StateObject(wrappedValue: activityColorPreferences)
+            _activityGoalPreferences = StateObject(wrappedValue: ActivityGoalPreferences())
             _pomodoroStatusItemController = StateObject(
                 wrappedValue: PomodoroStatusItemController(
                     controller: timerController,
@@ -86,6 +88,7 @@ struct MinimalTimerApp: App {
                 .environmentObject(controller)
                 .environmentObject(detailWindowCoordinator)
                 .environmentObject(activityColorPreferences)
+                .environmentObject(activityGoalPreferences)
         } label: {
             TimerMenuBarLabel(controller: controller)
                 .onAppear {
@@ -102,6 +105,7 @@ struct MinimalTimerApp: App {
                 .environmentObject(controller)
                 .environmentObject(menuBarPreferences)
                 .environmentObject(activityColorPreferences)
+                .environmentObject(activityGoalPreferences)
                 .background(DetailWindowReader(coordinator: detailWindowCoordinator))
         }
         .defaultSize(width: 480, height: 560)

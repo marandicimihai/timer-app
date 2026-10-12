@@ -71,6 +71,12 @@ developer](https://support.apple.com/guide/mac-help/open-a-mac-app-from-an-unkno
 | Take a focused break from multitasking | Choose **Start Focus**. When it completes, start the suggested break (or the next focus session). |
 | See where the day went | Open **History** for daily totals and completed activities. |
 | Tune the timer | Open **Settings** to change durations, alerts, and menu-bar display. |
+| Set a weekly goal | In **Settings → Weekly goals**, enable an activity and enter its target hours. Progress appears below the menu-bar chart. |
+
+Weekly goals run Monday–Sunday in your local time zone and include time from a
+running activity. Progress is red below 20%, yellow from 20% to below 70%, and
+green from 70% onward. Targets stay saved between launches and can be edited or
+turned off in Settings.
 
 ## Your data
 

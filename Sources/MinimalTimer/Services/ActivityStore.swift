@@ -260,12 +260,41 @@ final class ActivityStore: ObservableObject {
             }
         }
 
-        return activityData.map { id, data in
+        return activityData.sorted {
+            if $0.value.latestStart != $1.value.latestStart {
+                return $0.value.latestStart > $1.value.latestStart
+            }
+            return $0.key < $1.key
+        }
+        .map { id, data in
             KnownActivity(id: id, name: data.name)
         }
-        .sorted {
-            $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+    }
+
+    func weeklyGoalProgress(
+        for goals: [WeeklyActivityGoal],
+        at referenceDate: Date
+    ) -> [ActivityGoalProgress] {
+        let today = calendar.startOfDay(for: referenceDate)
+        // Calendar weekdays are Sunday = 1, Monday = 2. Goals reset on Monday
+        // in the user's time zone, independently of the chart's rolling week.
+        let daysSinceMonday = (calendar.component(.weekday, from: today) + 5) % 7
+        let weekStart = calendar.date(byAdding: .day, value: -daysSinceMonday, to: today) ?? today
+        var durations: [String: TimeInterval] = [:]
+
+        func accumulate(name: String, start: Date, end: Date) {
+            let duration = max(0, min(end, referenceDate).timeIntervalSince(max(start, weekStart)))
+            durations[normalizedActivityName(name), default: 0] += duration
         }
+
+        for session in sessions {
+            accumulate(name: session.name, start: session.startedAt, end: session.endedAt)
+        }
+        if let activeActivity {
+            accumulate(name: activeActivity.name, start: activeActivity.startedAt, end: referenceDate)
+        }
+
+        return goals.map { ActivityGoalProgress(goal: $0, duration: durations[$0.id, default: 0]) }
     }
 
     func activityOverview(at referenceDate: Date) -> ActivityOverview {

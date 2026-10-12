@@ -19,6 +19,7 @@ struct TimerPopoverView: View {
             }
 
             activityCard
+            WeeklyGoalsView(activityStore: controller.activityStore, referenceDate: controller.currentDate)
             Divider()
             PomodoroMainControls(controller: controller)
             Divider()
