@@ -104,16 +104,18 @@ func recentActivityNamesAreUniqueAndNewestFirst() throws {
     let clock = TestClock(Date(timeIntervalSince1970: 1_000))
     let store = try makeStore(clock: clock)
 
-    for name in ["Writing", "Email", "writing", "Planning"] {
+    for name in ["Reading", "Design", "Writing", "Email", "writing", "Planning"] {
         store.startActivity(named: name)
         clock.date.addTimeInterval(60)
         _ = store.finishActivity()
     }
 
+    #expect(store.recentActivityNames() == ["Planning", "writing", "Email", "Design", "Reading"])
     #expect(store.recentActivityNames(limit: 3) == ["Planning", "writing", "Email"])
 
     store.startActivity(named: "Planning")
-    #expect(store.recentActivityNames(limit: 3) == ["writing", "Email"])
+    #expect(store.recentActivityNames() == ["writing", "Email", "Design", "Reading"])
+    #expect(store.recentActivityNames(limit: 3) == ["writing", "Email", "Design"])
 }
 
 @Test @MainActor

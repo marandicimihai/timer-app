@@ -111,6 +111,25 @@ final class TimerAppController: ObservableObject {
         objectWillChange.send()
     }
 
+    func deleteActivityHistory(on day: Date) {
+        guard activityStore.deleteHistory(on: day) > 0 else { return }
+        objectWillChange.send()
+    }
+
+    @discardableResult
+    func deleteActivity(
+        named name: String,
+        goalPreferences: ActivityGoalPreferences,
+        colorPreferences: ActivityColorPreferences
+    ) throws -> Bool {
+        guard try activityStore.deleteActivity(named: name) else { return false }
+        let id = ActivityColorPalette.normalizedIdentifier(for: name)
+        goalPreferences.removeGoal(forActivityID: id)
+        colorPreferences.removeColor(forActivityID: id)
+        objectWillChange.send()
+        return true
+    }
+
     func archiveActivity(named name: String) {
         _ = activityStore.archiveActivity(named: name)
     }

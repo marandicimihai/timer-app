@@ -54,6 +54,15 @@ final class ActivityColorPreferences: ObservableObject {
         }
     }
 
+    func removeColor(forActivityID activityID: String) {
+        guard archivePreferences?.isArchived(activityID) != true else { return }
+        var storedColors = Self.storedColors(in: userDefaults)
+        storedColors.removeValue(forKey: activityID)
+        guard let data = try? JSONEncoder().encode(storedColors) else { return }
+        customColors.removeValue(forKey: activityID)
+        userDefaults?.set(data, forKey: Self.customColorsKey)
+    }
+
     private func saveCustomColors(replacing activityID: String, with rgba: RGBA) {
         var storedColors = Self.storedColors(in: userDefaults)
         storedColors[activityID] = rgba

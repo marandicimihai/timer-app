@@ -57,7 +57,7 @@ private struct StatisticsContentView: View {
             if statistics.activities.isEmpty {
                 ContentUnavailableView(
                     "No statistics yet",
-                    systemImage: "chart.xyaxis.line",
+                    systemImage: "chart.bar.xaxis",
                     description: Text("Finish a few activities to see their trends and averages.")
                 )
             } else {
@@ -66,13 +66,13 @@ private struct StatisticsContentView: View {
                         controls
 
                         if showsAllActivities {
-                            AllActivitiesLineChart(
+                            AllActivitiesBarChart(
                                 activities: statistics.activities,
                                 period: selectedPeriod,
                                 customColors: activityColorPreferences.customColors
                             )
                         } else if let selectedActivity {
-                            ActivityLineChart(
+                            ActivityBarChart(
                                 activity: selectedActivity,
                                 period: selectedPeriod,
                                 color: ActivityColorPalette.color(
@@ -80,7 +80,6 @@ private struct StatisticsContentView: View {
                                     customColors: activityColorPreferences.customColors
                                 )
                             )
-                            selectedActivityInsights(selectedActivity)
                         }
 
                         overallInsights
@@ -133,26 +132,6 @@ private struct StatisticsContentView: View {
         }
     }
 
-    private func selectedActivityInsights(_ activity: ActivityStatistics) -> some View {
-        HStack(spacing: 0) {
-            compactMetric(
-                value: "\(activity.activeDayCount)/\(selectedPeriod.dayCount)",
-                label: "Active days"
-            )
-            Divider().frame(height: 34)
-            compactMetric(
-                value: "\(activity.currentStreak) d",
-                label: "Current streak"
-            )
-            Divider().frame(height: 34)
-            compactMetric(
-                value: activity.consistency.formatted(.percent.precision(.fractionLength(0))),
-                label: "Consistency"
-            )
-        }
-        .padding(.vertical, 8)
-    }
-
     private var overallInsights: some View {
         VStack(alignment: .leading, spacing: 10) {
             Divider()
@@ -171,22 +150,9 @@ private struct StatisticsContentView: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Overall statistics for \(selectedPeriod.longLabel)")
     }
-
-    private func compactMetric(value: String, label: String) -> some View {
-        VStack(spacing: 2) {
-            Text(value)
-                .font(.callout.weight(.semibold))
-                .monospacedDigit()
-            Text(label)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-        }
-        .frame(maxWidth: .infinity)
-    }
 }
 
-private struct AllActivitiesLineChart: View {
+private struct AllActivitiesBarChart: View {
     let activities: [ActivityStatistics]
     let period: StatisticsPeriod
     let customColors: [String: Color]
@@ -197,12 +163,12 @@ private struct AllActivitiesLineChart: View {
     ]
 
     private var axisDates: [Date] {
-        guard let days = activities.first?.days else { return [] }
-        let selected = days.enumerated().compactMap { index, day in
-            index.isMultiple(of: period.xAxisStride) ? day.day : nil
-        }
-        guard let last = days.last?.day, selected.last != last else { return selected }
-        return selected + [last]
+        period.axisDates(for: activities.first?.days ?? [])
+    }
+
+    private var maximumDuration: TimeInterval {
+        let maximum = activities.flatMap(\.days).map(\.duration).max() ?? 0
+        return max(3600, ceil(maximum / 3600) * 3600)
     }
 
     var body: some View {
@@ -218,22 +184,12 @@ private struct AllActivitiesLineChart: View {
             Chart {
                 ForEach(activities) { activity in
                     ForEach(activity.days) { day in
-                        LineMark(
+                        BarMark(
                             x: .value("Day", day.day, unit: .day),
                             y: .value("Time", day.duration)
                         )
                         .foregroundStyle(by: .value("Activity", activity.id))
-                        .lineStyle(StrokeStyle(lineWidth: 2))
-                        .interpolationMethod(.catmullRom)
-
-                        if period.dayCount <= 14 {
-                            PointMark(
-                                x: .value("Day", day.day, unit: .day),
-                                y: .value("Time", day.duration)
-                            )
-                            .foregroundStyle(by: .value("Activity", activity.id))
-                            .symbolSize(period == .sevenDays ? 24 : 10)
-                        }
+                        .position(by: .value("Activity", activity.id))
                     }
                 }
             }
@@ -241,29 +197,30 @@ private struct AllActivitiesLineChart: View {
                 ActivityColorPalette.color(forActivityID: activityID, customColors: customColors)
             })
             .chartLegend(.hidden)
+            .chartYScale(domain: 0...maximumDuration)
             .chartXAxis {
                 AxisMarks(values: axisDates) { value in
-                    AxisGridLine().foregroundStyle(.clear)
                     AxisTick()
-                    AxisValueLabel {
+                    AxisValueLabel(centered: false, anchor: .top) {
                         if let date = value.as(Date.self) {
                             Text(date, format: axisDateFormat)
+                                .fixedSize()
                         }
                     }
                 }
             }
             .chartYAxis {
-                AxisMarks(position: .leading) { value in
+                AxisMarks(position: .leading, values: .stride(by: 3600.0)) { value in
                     AxisGridLine()
                     AxisValueLabel {
                         if let duration = value.as(Double.self) {
-                            Text(DurationFormatter.concise(duration))
+                            Text("\(Int(duration / 3600))h")
                         }
                     }
                 }
             }
             .frame(height: 280)
-            .accessibilityIdentifier("allActivityStatisticsLineChart")
+            .accessibilityIdentifier("allActivityStatisticsBarChart")
 
             LazyVGrid(columns: legendColumns, alignment: .leading, spacing: 6) {
                 ForEach(activities) { activity in
@@ -344,9 +301,23 @@ private enum StatisticsPeriod: Int, CaseIterable, Identifiable {
         case .ninetyDays: 14
         }
     }
+
+    func axisDates(for days: [ActivityDayStatistics]) -> [Date] {
+        let calendar = Calendar.current
+        return days.enumerated().compactMap { index, day in
+            guard index.isMultiple(of: xAxisStride) || index == days.count - 1 else { return nil }
+            // Leave room for the final date when it falls close to a regular label.
+            if index != days.count - 1 && days.count - 1 - index < xAxisStride / 2 {
+                return nil
+            }
+            guard let interval = calendar.dateInterval(of: .day, for: day.day) else { return day.day }
+            // Match the center of the daily bar, including days with daylight-saving changes.
+            return interval.start.addingTimeInterval(interval.duration / 2)
+        }
+    }
 }
 
-private struct ActivityLineChart: View {
+private struct ActivityBarChart: View {
     let activity: ActivityStatistics
     let period: StatisticsPeriod
     let color: Color
@@ -356,11 +327,12 @@ private struct ActivityLineChart: View {
     }
 
     private var axisDates: [Date] {
-        let selected = activity.days.enumerated().compactMap { index, day in
-            index.isMultiple(of: period.xAxisStride) ? day.day : nil
-        }
-        guard let last = activity.days.last?.day, selected.last != last else { return selected }
-        return selected + [last]
+        period.axisDates(for: activity.days)
+    }
+
+    private var maximumDuration: TimeInterval {
+        let maximum = activity.days.map(\.duration).max() ?? 0
+        return max(3600, ceil(maximum / 3600) * 3600)
     }
 
     var body: some View {
@@ -389,35 +361,11 @@ private struct ActivityLineChart: View {
 
             Chart {
                 ForEach(activity.days) { day in
-                    AreaMark(
-                        x: .value("Day", day.day, unit: .day),
-                        y: .value("Time", day.duration)
-                    )
-                    .foregroundStyle(
-                        .linearGradient(
-                            colors: [color.opacity(0.22), color.opacity(0.02)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    .interpolationMethod(.catmullRom)
-
-                    LineMark(
+                    BarMark(
                         x: .value("Day", day.day, unit: .day),
                         y: .value("Time", day.duration)
                     )
                     .foregroundStyle(color)
-                    .lineStyle(StrokeStyle(lineWidth: 2))
-                    .interpolationMethod(.catmullRom)
-
-                    if period.dayCount <= 14 {
-                        PointMark(
-                            x: .value("Day", day.day, unit: .day),
-                            y: .value("Time", day.duration)
-                        )
-                        .foregroundStyle(color)
-                        .symbolSize(period == .sevenDays ? 28 : 12)
-                    }
                 }
 
                 RuleMark(y: .value("Daily average", dailyAverage))
@@ -429,29 +377,30 @@ private struct ActivityLineChart: View {
                             .foregroundStyle(.secondary)
                     }
             }
+            .chartYScale(domain: 0...maximumDuration)
             .chartXAxis {
                 AxisMarks(values: axisDates) { value in
-                    AxisGridLine().foregroundStyle(.clear)
                     AxisTick()
-                    AxisValueLabel {
+                    AxisValueLabel(centered: false, anchor: .top) {
                         if let date = value.as(Date.self) {
                             Text(date, format: axisDateFormat)
+                                .fixedSize()
                         }
                     }
                 }
             }
             .chartYAxis {
-                AxisMarks(position: .leading) { value in
+                AxisMarks(position: .leading, values: .stride(by: 3600.0)) { value in
                     AxisGridLine()
                     AxisValueLabel {
                         if let duration = value.as(Double.self) {
-                            Text(DurationFormatter.concise(duration))
+                            Text("\(Int(duration / 3600))h")
                         }
                     }
                 }
             }
             .frame(height: 245)
-            .accessibilityIdentifier("activityStatisticsLineChart")
+            .accessibilityIdentifier("activityStatisticsBarChart")
         }
         .padding(14)
         .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 12))

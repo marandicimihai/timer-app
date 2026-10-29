@@ -33,21 +33,24 @@ func weeklyGoalsRejectInvalidTargetsWithoutChangingExistingGoals() {
 }
 
 @Test
-func weeklyGoalProgressUsesRequestedColorBoundariesAndSupportsOverachievement() {
+func weeklyGoalProgressCompletesAtTargetAndCapsDisplayedPercentage() {
     let goal = WeeklyActivityGoal(id: "writing", name: "Writing", hours: 10)
-    for (hours, percentage, level) in [
-        (0.0, 0, ActivityGoalProgressLevel.red),
-        (1.0, 10, .red),
-        (1.99, 19, .red),
-        (2.0, 20, .yellow),
-        (6.99, 69, .yellow),
-        (7.0, 70, .green),
-        (10.0, 100, .green),
-        (12.0, 120, .green)
+    for (hours, percentage, isComplete) in [
+        (0.0, 0, false),
+        (1.0, 10, false),
+        (1.99, 19, false),
+        (2.0, 20, false),
+        (6.99, 69, false),
+        (7.0, 70, false),
+        (9.999, 99, false),
+        (10.0, 100, true),
+        (12.0, 100, true)
     ] {
         let progress = ActivityGoalProgress(goal: goal, duration: hours * 3_600)
         #expect(progress.percentage == percentage)
-        #expect(progress.level == level)
+        #expect(progress.isComplete == isComplete)
+        #expect(abs(progress.remainingDuration - max(0, (10 - hours) * 3_600)) < 0.000_001)
+        #expect(progress.completedHours == hours)
     }
 }
 

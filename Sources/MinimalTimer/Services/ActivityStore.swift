@@ -125,8 +125,21 @@ struct ActivityStatisticsSnapshot: Equatable {
 @MainActor
 final class ActivityStore: ObservableObject {
     @Published private(set) var activeActivity: ActiveActivity?
-    @Published private(set) var sessions: [ActivitySession] = []
+    @Published private(set) var historyRevision = 0
     let archivePreferences: ActivityArchivePreferences
+
+    // Analytics can request all sessions, but opening History only fetches its
+    // visible date ranges. Keep the full-history cache lazy and invalidate on writes.
+    private var cachedSessions: [ActivitySession]?
+    var sessions: [ActivitySession] {
+        if let cachedSessions { return cachedSessions }
+        let descriptor = FetchDescriptor<ActivitySession>(
+            sortBy: [SortDescriptor(\ActivitySession.startedAt, order: .reverse)]
+        )
+        let fetched = (try? modelContext.fetch(descriptor)) ?? []
+        cachedSessions = fetched
+        return fetched
+    }
 
     private let modelContainer: ModelContainer
     private let modelContext: ModelContext
@@ -144,7 +157,6 @@ final class ActivityStore: ObservableObject {
         self.now = now
         self.calendar = calendar
         self.archivePreferences = archivePreferences ?? ActivityArchivePreferences(userDefaults: nil)
-        reloadHistory()
     }
 
     func startActivity(named rawName: String, at date: Date? = nil) {
@@ -171,7 +183,6 @@ final class ActivityStore: ObservableObject {
         )
         modelContext.insert(session)
         saveHistory()
-        sessions.insert(session, at: 0)
         self.activeActivity = nil
         return session
     }
@@ -186,18 +197,29 @@ final class ActivityStore: ObservableObject {
             modelContext.delete(session)
         }
         saveHistory()
-        let removedIDs = Set(removable.map(\.id))
-        sessions.removeAll { removedIDs.contains($0.id) }
     }
 
     @discardableResult
     func deleteSession(id: UUID) -> Bool {
-        guard let session = sessions.first(where: { $0.id == id }),
+        let descriptor = FetchDescriptor<ActivitySession>(predicate: #Predicate { $0.id == id })
+        guard let session = try? modelContext.fetch(descriptor).first,
               !isArchived(activityNamed: session.name) else { return false }
         modelContext.delete(session)
         saveHistory()
-        sessions.removeAll { $0.id == id }
         return true
+    }
+
+    @discardableResult
+    func deleteHistory(on day: Date) -> Int {
+        guard let interval = calendar.dateInterval(of: .day, for: day),
+              let daySessions = try? historySessions(from: interval.start, to: interval.end) else { return 0 }
+        let removable = daySessions.filter { !isArchived(activityNamed: $0.name) }
+        guard !removable.isEmpty else { return 0 }
+        for session in removable {
+            modelContext.delete(session)
+        }
+        saveHistory()
+        return removable.count
     }
 
     @discardableResult
@@ -210,16 +232,101 @@ final class ActivityStore: ObservableObject {
         }
         guard !matchingSessions.isEmpty else { return 0 }
 
-        let matchingIDs = Set(matchingSessions.map(\.id))
         for session in matchingSessions {
             modelContext.delete(session)
         }
         saveHistory()
-        sessions.removeAll { matchingIDs.contains($0.id) }
         return matchingSessions.count
     }
 
+    // Explicit activity deletion also removes archived history. Ordinary history
+    // deletion continues to protect archives.
+    @discardableResult
+    func deleteActivity(named rawName: String) throws -> Bool {
+        let id = normalizedActivityName(rawName)
+        guard !id.isEmpty,
+              activeActivity.map({ normalizedActivityName($0.name) }) != id else { return false }
+
+        let matchingSessions = try modelContext.fetch(FetchDescriptor<ActivitySession>()).filter {
+            normalizedActivityName($0.name) == id
+        }
+        for session in matchingSessions {
+            modelContext.delete(session)
+        }
+        do {
+            try modelContext.save()
+        } catch {
+            modelContext.rollback()
+            throw error
+        }
+        archivePreferences.unarchiveActivity(id: id)
+        cachedSessions = nil
+        historyRevision += 1
+        return true
+    }
+
     var dailySummaries: [DailyActivitySummary] {
+        dailySummaries(for: sessions)
+    }
+
+    func recentHistoryInterval(at date: Date) -> DateInterval {
+        let today = calendar.startOfDay(for: date)
+        let start = calendar.date(byAdding: .day, value: -29, to: today) ?? today
+        let end = calendar.date(byAdding: .day, value: 1, to: today) ?? date
+        return DateInterval(start: start, end: end)
+    }
+
+    func historySummaries(from start: Date, to end: Date) throws -> [DailyActivitySummary] {
+        dailySummaries(for: try historySessions(from: start, to: end))
+    }
+
+    // Discover only months that contain older entries. One date per month is
+    // fetched; the month's sessions are fetched only when its disclosure opens.
+    func historyMonths(before cutoff: Date) throws -> [DateInterval] {
+        var months: [DateInterval] = []
+        var upperBound = cutoff
+        while true {
+            let bound = upperBound
+            var descriptor = FetchDescriptor<ActivitySession>(
+                predicate: #Predicate { $0.startedAt < bound },
+                sortBy: [SortDescriptor(\ActivitySession.startedAt, order: .reverse)]
+            )
+            descriptor.fetchLimit = 1
+            descriptor.propertiesToFetch = [\ActivitySession.startedAt]
+            guard let latest = try modelContext.fetch(descriptor).first,
+                  let month = calendar.dateInterval(of: .month, for: latest.startedAt) else { break }
+            months.append(DateInterval(start: month.start, end: min(month.end, cutoff)))
+            upperBound = month.start
+        }
+        return months
+    }
+
+    func hasUnarchivedHistory() throws -> Bool {
+        if archivePreferences.archivedActivities.isEmpty {
+            var descriptor = FetchDescriptor<ActivitySession>()
+            descriptor.fetchLimit = 1
+            return try modelContext.fetchCount(descriptor) > 0
+        }
+
+        var descriptor = FetchDescriptor<ActivitySession>()
+        descriptor.propertiesToFetch = [\ActivitySession.name]
+        descriptor.fetchLimit = 100
+        while true {
+            let batch = try modelContext.fetch(descriptor)
+            if batch.contains(where: { !isArchived(activityNamed: $0.name) }) { return true }
+            if batch.count < 100 { return false }
+            descriptor.fetchOffset = (descriptor.fetchOffset ?? 0) + batch.count
+        }
+    }
+
+    private func historySessions(from start: Date, to end: Date) throws -> [ActivitySession] {
+        try modelContext.fetch(FetchDescriptor<ActivitySession>(
+            predicate: #Predicate { $0.startedAt >= start && $0.startedAt < end },
+            sortBy: [SortDescriptor(\ActivitySession.startedAt, order: .reverse)]
+        ))
+    }
+
+    private func dailySummaries(for sessions: [ActivitySession]) -> [DailyActivitySummary] {
         let grouped = Dictionary(grouping: sessions) { session in
             calendar.startOfDay(for: session.startedAt)
         }
@@ -234,17 +341,25 @@ final class ActivityStore: ObservableObject {
             .sorted { $0.day > $1.day }
     }
 
-    func recentActivityNames(limit: Int = 3) -> [String] {
+    func recentActivityNames(limit: Int = .max) -> [String] {
         guard limit > 0 else { return [] }
         let activeName = activeActivity.map { normalizedActivityName($0.name) }
         var seenNames: Set<String> = []
         var names: [String] = []
-
-        for session in sessions.sorted(by: { $0.startedAt > $1.startedAt }) {
-            let normalizedName = normalizedActivityName(session.name)
-            guard normalizedName != activeName, seenNames.insert(normalizedName).inserted else { continue }
-            names.append(session.name)
-            if names.count == limit { break }
+        var descriptor = FetchDescriptor<ActivitySession>(
+            sortBy: [SortDescriptor(\ActivitySession.startedAt, order: .reverse)]
+        )
+        descriptor.propertiesToFetch = [\ActivitySession.name, \ActivitySession.startedAt]
+        descriptor.fetchLimit = 100
+        while let batch = try? modelContext.fetch(descriptor) {
+            for session in batch {
+                let normalizedName = normalizedActivityName(session.name)
+                guard normalizedName != activeName, seenNames.insert(normalizedName).inserted else { continue }
+                names.append(session.name)
+                if names.count == limit { return names }
+            }
+            if batch.count < 100 { break }
+            descriptor.fetchOffset = (descriptor.fetchOffset ?? 0) + batch.count
         }
         return names
     }
@@ -256,7 +371,9 @@ final class ActivityStore: ObservableObject {
             activityData[activity.id] = (name: activity.name, latestStart: .distantPast)
         }
 
-        for session in sessions {
+        var descriptor = FetchDescriptor<ActivitySession>()
+        descriptor.propertiesToFetch = [\ActivitySession.name, \ActivitySession.startedAt]
+        for session in (try? modelContext.fetch(descriptor)) ?? [] {
             let id = normalizedActivityName(session.name)
             guard !id.isEmpty else { continue }
             if let existing = activityData[id], existing.latestStart >= session.startedAt {
@@ -312,7 +429,7 @@ final class ActivityStore: ObservableObject {
             durations[normalizedActivityName(name), default: 0] += duration
         }
 
-        for session in sessions {
+        for session in sessionsOverlapping(from: weekStart, to: referenceDate) {
             accumulate(name: session.name, start: session.startedAt, end: session.endedAt)
         }
         if let activeActivity {
@@ -324,8 +441,10 @@ final class ActivityStore: ObservableObject {
 
     func activityOverview(at referenceDate: Date) -> ActivityOverview {
         let today = calendar.startOfDay(for: referenceDate)
+        let weekStart = calendar.date(byAdding: .day, value: -6, to: today) ?? today
         var activityData: [String: (name: String, latestStart: Date, durations: [TimeInterval])] = [:]
-        var intervals = sessions.map { (name: $0.name, start: $0.startedAt, end: $0.endedAt) }
+        var intervals = sessionsOverlapping(from: weekStart, to: referenceDate)
+            .map { (name: $0.name, start: $0.startedAt, end: $0.endedAt) }
         if let activeActivity {
             intervals.append((
                 name: activeActivity.name,
@@ -392,7 +511,8 @@ final class ActivityStore: ObservableObject {
                 dailyDurations: [TimeInterval]
             )
         ] = [:]
-        var intervals = sessions.map { (name: $0.name, start: $0.startedAt, end: $0.endedAt) }
+        var intervals = sessionsOverlapping(from: days.first ?? today, to: referenceDate)
+            .map { (name: $0.name, start: $0.startedAt, end: $0.endedAt) }
         if let activeActivity {
             intervals.append((
                 name: activeActivity.name,
@@ -471,15 +591,17 @@ final class ActivityStore: ObservableObject {
         )
     }
 
-    private func reloadHistory() {
+    private func sessionsOverlapping(from start: Date, to end: Date) -> [ActivitySession] {
         let descriptor = FetchDescriptor<ActivitySession>(
-            sortBy: [SortDescriptor(\ActivitySession.startedAt, order: .reverse)]
+            predicate: #Predicate { $0.endedAt > start && $0.startedAt < end }
         )
-        sessions = (try? modelContext.fetch(descriptor)) ?? []
+        return (try? modelContext.fetch(descriptor)) ?? []
     }
 
     private func saveHistory() {
         try? modelContext.save()
+        cachedSessions = nil
+        historyRevision += 1
     }
 
     private func normalizedActivityName(_ name: String) -> String {

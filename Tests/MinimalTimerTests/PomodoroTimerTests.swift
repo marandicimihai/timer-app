@@ -280,8 +280,12 @@ func pomodoroCompletesWithoutPopoverRefresh() async throws {
     )
 
     pomodoro.start(.focus)
-    // Leave enough scheduling headroom when the MainActor test suite runs in parallel.
-    try await Task.sleep(for: .milliseconds(250))
+    // Other MainActor tests may delay the completion task's first execution.
+    // Yield until it finishes rather than assuming a fixed scheduling order.
+    let deadline = ContinuousClock.now.advanced(by: .seconds(2))
+    while pomodoro.activePhase != nil, ContinuousClock.now < deadline {
+        try await Task.sleep(for: .milliseconds(10))
+    }
 
     #expect(pomodoro.activePhase == nil)
     #expect(pomodoro.completedPhase == .focus)

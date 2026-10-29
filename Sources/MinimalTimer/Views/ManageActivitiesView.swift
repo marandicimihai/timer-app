@@ -5,6 +5,8 @@ struct ManageActivitiesView: View {
     @EnvironmentObject private var archivePreferences: ActivityArchivePreferences
     @EnvironmentObject private var colorPreferences: ActivityColorPreferences
     @EnvironmentObject private var goalPreferences: ActivityGoalPreferences
+    @State private var activityToDelete: KnownActivity?
+    @State private var deletionError: String?
 
     var body: some View {
         Form {
@@ -20,7 +22,7 @@ struct ManageActivitiesView: View {
             } header: {
                 Text("Activities and colors")
             } footer: {
-                Text("Colors are used in summaries and statistics. Finish a running activity before archiving it.")
+                Text("Colors are used in summaries and statistics. Finish a running activity before archiving or deleting it.")
             }
 
             if !archivedActivities.isEmpty {
@@ -31,7 +33,7 @@ struct ManageActivitiesView: View {
                 } header: {
                     Text("Archived activities")
                 } footer: {
-                    Text("Archived activities stay visible in charts, goals, and history. Their settings and history are protected. Starting the same name automatically unarchives it.")
+                    Text("Archived activities stay visible in charts, goals, and history. Their settings and history are protected unless you delete the activity. Starting the same name automatically unarchives it.")
                 }
             }
 
@@ -48,6 +50,25 @@ struct ManageActivitiesView: View {
         }
         .formStyle(.grouped)
         .navigationTitle("Manage activities")
+        .alert("Delete Activity?", isPresented: Binding(
+            get: { activityToDelete != nil },
+            set: { if !$0 { activityToDelete = nil } }
+        ), presenting: activityToDelete) { activity in
+            Button("Delete Activity", role: .destructive) {
+                deleteActivity(activity)
+            }
+            Button("Cancel", role: .cancel) { activityToDelete = nil }
+        } message: { activity in
+            Text("Delete “\(activity.name)” and all of its history, including archived entries? Its weekly goal and custom color will also be removed. This cannot be undone.")
+        }
+        .alert("Could Not Delete Activity", isPresented: Binding(
+            get: { deletionError != nil },
+            set: { if !$0 { deletionError = nil } }
+        )) {
+            Button("OK", role: .cancel) { deletionError = nil }
+        } message: {
+            Text(deletionError ?? "Please try again.")
+        }
     }
 
     private var activities: [KnownActivity] {
@@ -100,6 +121,27 @@ struct ManageActivitiesView: View {
                     .help(isRunning ? "Finish this activity before archiving it" : "Keep history and lock activity settings")
                     .accessibilityIdentifier("archiveActivity.\(activity.id)")
             }
+
+            Button("Delete", role: .destructive) { activityToDelete = activity }
+                .disabled(isRunning)
+                .help(isRunning ? "Finish this activity before deleting it" : "Delete this activity and all its history")
+                .accessibilityLabel("Delete \(activity.name)")
+                .accessibilityIdentifier("deleteActivity.\(activity.id)")
+        }
+    }
+
+    private func deleteActivity(_ activity: KnownActivity) {
+        activityToDelete = nil
+        do {
+            if try !controller.deleteActivity(
+                named: activity.name,
+                goalPreferences: goalPreferences,
+                colorPreferences: colorPreferences
+            ) {
+                deletionError = "Finish this activity before deleting it."
+            }
+        } catch {
+            deletionError = "The activity could not be deleted. Please try again."
         }
     }
 }

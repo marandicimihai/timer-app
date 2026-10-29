@@ -8,14 +8,8 @@ struct WeeklyGoalsView: View {
     var body: some View {
         if !goalPreferences.goals.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("Weekly goals")
-                        .font(.subheadline.weight(.semibold))
-                    Spacer()
-                    Text("Mon–Sun")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
+                Text("Weekly goals")
+                    .font(.subheadline.weight(.semibold))
 
                 TimelineView(.everyMinute) { context in
                     ScrollView {
@@ -43,10 +37,12 @@ struct WeeklyGoalsView: View {
                 .help(progress.goal.name)
 
             HStack {
-                Text("\(progress.completedHours.formatted(.number.precision(.fractionLength(0...1))))/\(progress.goal.hours.formatted(.number.precision(.fractionLength(0...2)))) hours")
+                if !progress.isComplete {
+                    Text("\(DurationFormatter.concise((progress.remainingDuration / 60).rounded(.up) * 60)) left")
+                }
                 Spacer(minLength: 4)
                 Text("\(progress.percentage)% complete")
-                    .foregroundStyle(color(for: progress.level))
+                    .foregroundStyle(progress.isComplete ? Color.green : Color.secondary)
             }
             .font(.caption2.monospacedDigit())
 
@@ -55,7 +51,7 @@ struct WeeklyGoalsView: View {
                     .fill(.quaternary)
                     .overlay(alignment: .leading) {
                         Capsule()
-                            .fill(color(for: progress.level))
+                            .fill(progress.isComplete ? Color.green : Color.gray)
                             .frame(width: geometry.size.width * min(1, max(0, progress.fraction)))
                     }
             }
@@ -65,11 +61,4 @@ struct WeeklyGoalsView: View {
         .accessibilityIdentifier("weeklyGoal.\(progress.id)")
     }
 
-    private func color(for level: ActivityGoalProgressLevel) -> Color {
-        switch level {
-        case .red: .red
-        case .yellow: .yellow
-        case .green: .green
-        }
-    }
 }

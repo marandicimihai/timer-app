@@ -18,15 +18,6 @@ struct GoalsSettingsView: View {
                 }
             } header: {
                 Text("Weekly goals")
-            } footer: {
-                Text("Goals run Monday–Sunday and include your current activity. Hours can include decimals (0.1–168). Turn a goal off to remove it.")
-            }
-
-            if !archivePreferences.archivedActivities.isEmpty {
-                Section {
-                    Text("Archived activities keep their existing goals. Unarchive them in Manage activities to change a goal.")
-                        .foregroundStyle(.secondary)
-                }
             }
         }
         .formStyle(.grouped)
@@ -40,7 +31,7 @@ struct GoalsSettingsView: View {
         for activity in controller.activityStore.knownActivities {
             activities[activity.id] = activity
         }
-        return activities.values.sorted {
+        return activities.values.filter { !archivePreferences.isArchived($0.id) }.sorted {
             $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
         }
     }
@@ -61,19 +52,12 @@ struct GoalsSettingsView: View {
             set: { activityGoalPreferences.setGoal(hours: $0, forActivityNamed: activity.name) }
         )
 
-        let isArchived = archivePreferences.isArchived(activity.id)
-
         return HStack {
             Toggle(activity.name, isOn: enabled)
                 .toggleStyle(.checkbox)
                 .lineLimit(1)
                 .help(activity.name)
                 .accessibilityIdentifier("weeklyGoalToggle.\(activity.id)")
-            if isArchived {
-                Label("Archived", systemImage: "archivebox")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
             Spacer()
             HStack(spacing: 5) {
                 TextField("", value: hours, format: .number.precision(.fractionLength(0...2)))
@@ -94,7 +78,6 @@ struct GoalsSettingsView: View {
             .fixedSize(horizontal: true, vertical: false)
             .disabled(!enabled.wrappedValue)
         }
-        .disabled(isArchived)
     }
 
 }

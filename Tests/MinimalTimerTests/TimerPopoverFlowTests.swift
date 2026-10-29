@@ -1,8 +1,77 @@
 import AppKit
 import Foundation
 import SwiftData
+import SwiftUI
 import Testing
 @testable import MinimalTimer
+
+@Test @MainActor
+func recentActivitiesIndicatorConnectsToTheSwiftUIScrollView() async throws {
+    let window = NSWindow(
+        contentRect: NSRect(x: 0, y: 0, width: 300, height: 40),
+        styleMask: [], backing: .buffered, defer: false
+    )
+    window.isReleasedWhenClosed = false
+    defer { window.close() }
+    let host = NSHostingView(rootView: RecentActivitiesScrollView {
+        HStack {
+            ForEach(0..<20) { index in
+                Text("Activity \(index)").fixedSize()
+            }
+        }
+    })
+    window.contentView = host
+    host.frame = NSRect(x: 0, y: 0, width: 300, height: 40)
+    host.layoutSubtreeIfNeeded()
+
+    func findProbe(in view: NSView) -> RecentActivitiesScrollViewProbe? {
+        if let probe = view as? RecentActivitiesScrollViewProbe { return probe }
+        return view.subviews.lazy.compactMap { findProbe(in: $0) }.first
+    }
+
+    for _ in 0..<10 where findProbe(in: host) == nil {
+        try await Task.sleep(for: .milliseconds(20))
+        host.layoutSubtreeIfNeeded()
+    }
+    let probe = try #require(findProbe(in: host))
+    let scrollView = try #require(probe.enclosingScrollView)
+    probe.configure()
+    let initial = probe.latestMetrics
+    #expect(initial.width > initial.viewport)
+    scrollView.contentView.scroll(to: NSPoint(x: 100, y: 0))
+    scrollView.reflectScrolledClipView(scrollView.contentView)
+    for _ in 0..<10 where probe.latestMetrics.offset != 100 {
+        try await Task.sleep(for: .milliseconds(20))
+    }
+    #expect(scrollView.contentView.bounds.minX == 100)
+    #expect(probe.latestMetrics.offset == 100)
+}
+
+@Test @MainActor
+func recentActivitiesIndicatorTracksNativeHorizontalScrolling() async throws {
+    let scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: 300, height: 30))
+    scrollView.borderType = .noBorder
+    let document = NSView(frame: NSRect(x: 0, y: 0, width: 900, height: 30))
+    let probe = RecentActivitiesScrollViewProbe(frame: .zero)
+    document.addSubview(probe)
+    scrollView.documentView = document
+    var updates: [RecentActivitiesScrollMetrics] = []
+    probe.onScroll = { updates.append($0) }
+    probe.configure()
+
+    let initial = try #require(updates.last)
+    #expect(initial.width == 900)
+    #expect(initial.viewport == 300)
+    #expect(initial.offset == 0)
+
+    scrollView.contentView.scroll(to: NSPoint(x: 150, y: 0))
+    scrollView.reflectScrolledClipView(scrollView.contentView)
+    // Allow the clip view's bounds notification to reach the indicator.
+    for _ in 0..<20 where updates.last?.offset != 150 {
+        await Task.yield()
+    }
+    #expect(updates.last?.offset == 150)
+}
 
 @Test @MainActor
 func activityLoggingWorksWithoutPomodoro() throws {

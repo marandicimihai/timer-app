@@ -67,21 +67,30 @@ developer](https://support.apple.com/guide/mac-help/open-a-mac-app-from-an-unkno
 | --- | --- |
 | Track a task | Enter its name and choose **Start**. |
 | Move to the next task | Finish the current activity, then start another. |
-| Reuse something familiar | Choose it from **Start a recent one**. |
+| Reuse something familiar | Choose an activity below the input. Activities appear newest first; scroll horizontally to see more. |
 | Take a focused break from multitasking | Choose **Start Focus**. When it completes, start the suggested break (or the next focus session). |
 | See where the day went | Open **History** for daily totals and completed activities. |
 | Change the menu-bar display | Open **Settings** to show or hide the activity time. |
 | Set a weekly goal | In **Goals**, enable an activity and enter its target hours. Progress appears below the menu-bar chart. |
-| Manage activity colors and archives | Open **Manage activities** to change colors, archive activities, or unarchive them. |
+| Manage activities | Open **Manage activities** to change colors, archive or unarchive activities, or delete them with their history. |
 | Tune or disable Pomodoro | Open **Pomodoro** to change durations, alerts, its menu-bar icon, or turn Pomodoro off entirely. |
 
 Weekly goals run Monday–Sunday in your local time zone and include time from a
-running activity. Progress is red below 20%, yellow from 20% to below 70%, and
-green from 70% onward. Targets stay saved between launches and can be edited or
-turned off in Goals.
+running activity. Progress stays gray until the goal is complete, then turns
+green. Percentages stop at 100%, and remaining time is shown until completion.
+Targets stay saved between launches and can be edited or turned off in Goals.
+Archived activities are hidden from Goals.
+
+History shows the last 30 days first. Older entries are grouped by month and
+loaded when you expand a month. Right-click an entry to delete it, or a day
+heading to delete that day's entries. Deleting a day asks for confirmation and
+preserves entries belonging to archived activities.
 
 Archived activities keep their history, chart visibility, colors, and existing
 goals. Their colors, goals, and history stay read-only until you unarchive them.
+You can explicitly delete an archived or unarchived activity from **Manage
+activities**. After confirmation, this removes all its history, weekly goal,
+custom color, and archive status. Finish a running activity before deleting it.
 Starting an activity with the same name (ignoring case and surrounding spaces)
 automatically unarchives it. Turning off Pomodoro stops its timer and removes
 its controls and icon from the menu bar.

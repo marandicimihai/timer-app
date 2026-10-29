@@ -7,10 +7,6 @@ struct WeeklyActivityGoal: Codable, Equatable, Identifiable {
     let hours: Double
 }
 
-enum ActivityGoalProgressLevel {
-    case red, yellow, green
-}
-
 struct ActivityGoalProgress: Identifiable, Equatable {
     let goal: WeeklyActivityGoal
     let duration: TimeInterval
@@ -18,12 +14,9 @@ struct ActivityGoalProgress: Identifiable, Equatable {
     var id: String { goal.id }
     var completedHours: Double { duration / 3_600 }
     var fraction: Double { completedHours / goal.hours }
-    var percentage: Int { Int((fraction * 100).rounded(.down)) }
-    var level: ActivityGoalProgressLevel {
-        if fraction < 0.2 { return .red }
-        if fraction < 0.7 { return .yellow }
-        return .green
-    }
+    var percentage: Int { Int((min(1, max(0, fraction)) * 100).rounded(.down)) }
+    var isComplete: Bool { duration >= goal.hours * 3_600 }
+    var remainingDuration: TimeInterval { max(0, goal.hours * 3_600 - duration) }
 }
 
 @MainActor
