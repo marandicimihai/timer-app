@@ -34,6 +34,16 @@ enum DetailWindowTab: Hashable, CaseIterable {
 
 @MainActor
 final class TimerAppController: ObservableObject {
+    struct WheelActivity {
+        let name: String
+        let runningID: UUID?
+
+        init(name: String, runningID: UUID? = nil) {
+            self.name = name
+            self.runningID = runningID
+        }
+    }
+
     let activityStore: ActivityStore
     let pomodoro: PomodoroTimer
     @Published private(set) var currentDate: Date
@@ -94,6 +104,20 @@ final class TimerAppController: ObservableObject {
     func finishActivity() {
         _ = activityStore.finishActivity(at: now())
         refresh()
+    }
+
+    func wheelActivities() -> [WheelActivity] {
+        let running = activityStore.activeActivity.map { [WheelActivity(name: $0.name, runningID: $0.id)] } ?? []
+        return running + activityStore.recentActivityNames(limit: 4 - running.count).map { WheelActivity(name: $0) }
+    }
+
+    func selectWheelActivity(_ activity: WheelActivity) {
+        if let runningID = activity.runningID {
+            guard activityStore.activeActivity?.id == runningID else { return }
+            finishActivity()
+        } else {
+            startActivity(named: activity.name)
+        }
     }
 
     func deleteActivitySession(id: UUID) {

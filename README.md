@@ -52,6 +52,11 @@ Minimal Timer requires **macOS 14 or later**. Click the menu-bar icon, name an
 activity, and press **Start**. For a focus session, use the Pomodoro controls
 in the same little popover.
 
+Hold **Option-T** anywhere to open a wheel with up to four activities.
+Move toward an activity and release **T** to start it, or tap **Option-T**
+and flick toward it. The running activity appears at the top with a **Stop**
+label; select it to finish the timer.
+
 ### A quick security heads-up
 
 Minimal Timer is ad-hoc signed but is not yet Developer ID signed and notarized
@@ -137,7 +142,7 @@ preserving archived activity history.
 Run `./scripts/bundle-release.sh`, then:
 
 ```sh
-./scripts/package-dmg.sh dist/MinimalTimer-1.9.5.zip
+./scripts/package-dmg.sh dist/MinimalTimer-1.10.0.zip
 ./scripts/verify-release.sh dist/MinimalTimer.dmg
 ```
 

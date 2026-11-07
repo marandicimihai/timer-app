@@ -8,6 +8,7 @@ final class ApplicationDelegate: NSObject, NSApplicationDelegate {
     private var didScheduleStartup = false
     private var controller: TimerAppController?
     private var pomodoroStatusItemController: PomodoroStatusItemController?
+    private var recentActivityWheel: RecentActivityWheel?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -16,15 +17,20 @@ final class ApplicationDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        recentActivityWheel?.stop()
         controller?.applicationWillTerminate()
     }
 
     func configureLifecycle(
         controller: TimerAppController,
-        pomodoroStatusItemController: PomodoroStatusItemController
+        pomodoroStatusItemController: PomodoroStatusItemController,
+        activityColorPreferences: ActivityColorPreferences
     ) {
         self.controller = controller
         self.pomodoroStatusItemController = pomodoroStatusItemController
+        if recentActivityWheel == nil {
+            recentActivityWheel = RecentActivityWheel(controller: controller, colors: activityColorPreferences)
+        }
         scheduleStartupIfPossible()
     }
 
@@ -32,11 +38,13 @@ final class ApplicationDelegate: NSObject, NSApplicationDelegate {
         guard
             didFinishLaunching,
             !didScheduleStartup,
-            let pomodoroStatusItemController
+            let pomodoroStatusItemController,
+            let recentActivityWheel
         else { return }
         didScheduleStartup = true
         DispatchQueue.main.async {
             pomodoroStatusItemController.start()
+            recentActivityWheel.start()
         }
     }
 }
@@ -98,7 +106,8 @@ struct MinimalTimerApp: App {
                 .onAppear {
                     applicationDelegate.configureLifecycle(
                         controller: controller,
-                        pomodoroStatusItemController: pomodoroStatusItemController
+                        pomodoroStatusItemController: pomodoroStatusItemController,
+                        activityColorPreferences: activityColorPreferences
                     )
                 }
         }

@@ -119,6 +119,35 @@ func recentActivityStartsWithoutPomodoro() throws {
 }
 
 @Test @MainActor
+func activityWheelKeepsTheRunningActivityAndCanStopIt() throws {
+    let clock = TestClock(Date(timeIntervalSince1970: 1_000))
+    let store = try makeStore(clock: clock)
+    let pomodoro = PomodoroTimer(settings: makeTestPomodoroSettings(), now: { clock.date }, notifier: TestNotifier())
+    let controller = TimerAppController(activityStore: store, pomodoro: pomodoro, now: { clock.date })
+
+    for name in ["Reading", "Planning", "Email", "Writing"] {
+        controller.startActivity(named: name)
+        clock.date.addTimeInterval(60)
+        controller.finishActivity()
+    }
+    controller.startActivity(named: "planning")
+    clock.date.addTimeInterval(90)
+
+    let choices = controller.wheelActivities()
+    #expect(choices.map(\.name) == ["planning", "Writing", "Email", "Reading"])
+    let running = try #require(choices.first)
+    #expect(running.runningID == store.activeActivity?.id)
+    controller.selectWheelActivity(running)
+    #expect(store.activeActivity == nil)
+    #expect(store.sessions.first?.duration == 90)
+
+    let recent = try #require(controller.wheelActivities().first)
+    #expect(recent.runningID == nil)
+    controller.selectWheelActivity(recent)
+    #expect(store.activeActivity?.name == "planning")
+}
+
+@Test @MainActor
 func finishingAnActivityKeepsTheIndependentPomodoroRunning() throws {
     let clock = TestClock(Date(timeIntervalSince1970: 1_000))
     let store = try makeStore(clock: clock)
