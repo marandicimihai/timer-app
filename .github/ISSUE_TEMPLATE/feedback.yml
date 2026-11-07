@@ -1,0 +1,28 @@
+name: Feedback or install trouble
+description: Tell us what worked, what got in the way, or what is missing.
+title: "[Feedback] "
+body:
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What would you like to share?
+      options:
+        - Installation or first-launch trouble
+        - Something broken
+        - Usefulness or repeat use
+        - Missing feature
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Mac and app version
+      description: For install trouble, include macOS version, Intel or Apple Silicon, app version, and browser.
+      placeholder: "macOS 15, Apple Silicon, Minimal Timer 1.9.5, Safari"
+  - type: textarea
+    id: feedback
+    attributes:
+      label: What happened, or what would help?
+      description: For installation, tell us which step failed and the exact warning. Otherwise, what did you use it for, would you use it again, and what is missing? Screenshots are welcome; remove private activity names.
+    validations:
+      required: true

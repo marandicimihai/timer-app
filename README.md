@@ -12,6 +12,12 @@ you are done, finish the activity and let the app keep the total. No accounts,
 no subscriptions, no surprise upgrade screen—just a small timer that lives
 where you already look.
 
+**[Download for Mac](https://github.com/marandicimihai/timer-app/releases/latest/download/MinimalTimer.dmg)** · macOS 14+ · Apple Silicon and Intel
+
+Free, no account required. This release is not Apple-notarized; see the first-launch instructions below.
+
+If you find it useful, a GitHub star helps others discover the project.
+
 ## Why it feels good to use
 
 - **One click away.** It lives in the menu bar, not in another busy window.
@@ -31,12 +37,16 @@ where you already look.
 
 ## Install
 
-1. Open the repository's **Releases** page and download the latest
-   `MinimalTimer-x.y.z.zip` file.
-2. Double-click the downloaded ZIP to unpack it.
-3. Drag **Minimal Timer.app** into your **Applications** folder.
-4. Open it from Applications. Its timer icon will appear in the menu bar—there
-   is intentionally no Dock icon.
+1. **[Download Minimal Timer](https://github.com/marandicimihai/timer-app/releases/latest/download/MinimalTimer.dmg)** and double-click the disk image.
+2. Drag **Minimal Timer.app** onto **Applications** in the disk image.
+3. Open **Minimal Timer** from Applications, then eject the disk image.
+4. Look for its timer icon in the menu bar. There is intentionally no Dock icon.
+
+If macOS blocks the first launch, follow **A quick security heads-up** below.
+No Terminal, Homebrew, or developer tools are required.
+
+Prefer a ZIP? The versioned ZIP is available on the
+[Releases page](https://github.com/marandicimihai/timer-app/releases/latest).
 
 Minimal Timer requires **macOS 14 or later**. Click the menu-bar icon, name an
 activity, and press **Start**. For a focus session, use the Pomodoro controls
@@ -57,9 +67,25 @@ If macOS blocks the app:
 3. Scroll to **Security**, click **Open Anyway**, and confirm **Open**.
 4. Enter your Mac login password if asked.
 
+The flow below is a navigation diagram, not a screenshot:
+
+```mermaid
+flowchart LR
+    A[Launch from Applications] --> B[Dismiss the warning]
+    B --> C[System Settings]
+    C --> D[Privacy & Security]
+    D --> E[Security: Open Anyway for Minimal Timer]
+    E --> F[Confirm Open and authenticate if asked]
+    F --> G[Click the timer in the menu bar]
+```
+
+Approve only **Minimal Timer**. You do not need to disable Gatekeeper or change
+which apps your Mac allows globally. On a managed Mac, your organization may
+restrict this option; if it is missing, [report the exact warning](https://github.com/marandicimihai/timer-app/issues/new?template=feedback.yml).
+
 macOS will remember that choice for this copy of the app. For more context on
 the warning, see [Apple's guidance for opening an app from an unknown
-developer](https://support.apple.com/guide/mac-help/open-a-mac-app-from-an-unknown-developer-mh40616/mac).
+developer](https://support.apple.com/102445).
 
 ## A small tour
 
@@ -95,6 +121,10 @@ Starting an activity with the same name (ignoring case and surrounding spaces)
 automatically unarchives it. Turning off Pomodoro stops its timer and removes
 its controls and icon from the menu bar.
 
+## Feedback
+
+[Report install trouble or share feedback](https://github.com/marandicimihai/timer-app/issues/new?template=feedback.yml). Tell us what you used it for, whether you came back, and what would make it more useful.
+
 ## Your data
 
 Minimal Timer stores completed activity history locally at
@@ -104,5 +134,19 @@ preserving archived activity history.
 
 ## Build a release locally
 
-Run `./scripts/bundle-release.sh`. The versioned ZIP and its SHA-256 checksum
-will be written to `dist/` using the version in `Packaging/Info.plist`.
+Run `./scripts/bundle-release.sh`, then:
+
+```sh
+./scripts/package-dmg.sh dist/MinimalTimer-1.9.5.zip
+./scripts/verify-release.sh dist/MinimalTimer.dmg
+```
+
+Use the version in `Packaging/Info.plist` when the version changes. The scripts
+produce a universal app, a versioned ZIP, `MinimalTimer.dmg`, and SHA-256 files
+in `dist/`. The DMG includes an Applications shortcut and first-launch instructions.
+No Apple membership, notarization service, or hosting is required.
+
+Attach the DMG and its checksum to the corresponding GitHub release, alongside
+the ZIP and its checksum. Keep the exact asset name `MinimalTimer.dmg` so the
+Download for Mac link works. For an existing release, package its published ZIP
+instead of replacing it with a fresh build. See [release verification](docs/release-checklist.md).
